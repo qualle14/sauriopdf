@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2020", "DOM"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "rewriteRelativeImportExtensions": true,
+    "types": ["node"]
+  },
+  "include": [
+    "mod.ts",
+    "pdf-builder.ts",
+    "src/**/*.ts",
+    "lib/**/*.ts"
+  ],
+  "exclude": [
+    "rust-core",
+    "node_modules",
+    "wasm",
+    "dist",
+    "main_test.ts",
+    "demo.ts",
+    "examples"
+  ]
+}

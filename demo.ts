@@ -1,0 +1,190 @@
+/**
+ * SaurioPDF — demo PDF generator.
+ * Run: deno run --allow-read --allow-write demo.ts
+ */
+
+import { init, PDF, loadLiberationSans, text, rect } from "./mod.ts";
+
+await init();
+await loadLiberationSans("fonts/liberation-fonts-ttf-2.1.5");
+
+const pdf = new PDF({ title: "SaurioPDF Demo", author: "SaurioPDF" });
+
+// ── Header (repeats on every page) ───────────────────────────────────────────
+
+pdf.header(36, (ctx) => {
+  ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
+  ctx.add(
+    text("SaurioPDF Demo")
+      .at(24, 24)
+      .size(13)
+      .bold()
+      .color("white"),
+  );
+  ctx.add(
+    text("v0.1.0")
+      .at(ctx.width - 60, 24)
+      .size(10)
+      .color("#94a3b8"),
+  );
+});
+
+// ── Footer (with page numbers) ────────────────────────────────────────────────
+
+pdf.footer(24, (ctx) => {
+  ctx.add(
+    text(`Page ${ctx.pageNum} of ${ctx.totalPages}`)
+      .at(0, 8)
+      .size(9)
+      .color("gray")
+      .align("Center")
+      .maxWidth(ctx.width),
+  );
+});
+
+// ── Cover page ────────────────────────────────────────────────────────────────
+
+pdf
+  .h1("SaurioPDF Demo")
+  .spacer(4)
+  .p("High-performance PDF generation for Deno, Node.js, Bun, and browsers.", {
+    size: 14,
+    color: "slategray",
+  })
+  .spacer(16)
+  .hr()
+  .spacer(16)
+
+  // Long paragraph — tests real text wrapping
+  .h2("Text Wrapping")
+  .spacer(4)
+  .p(
+    "This paragraph demonstrates automatic text wrapping. Long lines are broken " +
+    "into multiple lines before being sent to the Krilla rendering engine, since " +
+    "Krilla's draw_text() draws at a single point with no built-in wrapping. " +
+    "All layout math — character width estimation, line breaking, and alignment " +
+    "offsets — is computed in TypeScript before the JSON payload reaches Rust.",
+  )
+  .spacer(8)
+
+  // Center and right aligned text
+  .h3("Alignment")
+  .spacer(4)
+  .p("This line is centered.", { align: "Center", color: "steelblue" })
+  .p("This line is right-aligned.", { align: "Right", color: "coral" })
+  .p("This line is left-aligned (default).", { align: "Left" })
+  .spacer(16)
+  .hr()
+  .spacer(16)
+
+  // Table — auto-width heuristic (no widths provided)
+  .h2("Table — auto column widths")
+  .spacer(4)
+  .p("Column widths below are computed automatically from content, not fixed percentages.", {
+    size: 10,
+    color: "slategray",
+  })
+  .spacer(4)
+  .table({
+    headers: ["Product", "Qty", "Price", "Total"],
+    rows: [
+      ["Widget Pro",    "5",  "$19.99", "$99.95"],
+      ["Gadget Deluxe", "2",  "$49.50", "$99.00"],
+      ["Thingamajig",   "10", "$4.95",  "$49.50"],
+      ["Doohickey",     "1",  "$149.00","$149.00"],
+    ],
+    striped:  true,
+    headerBg: "#1a1a2e",
+    // no widths: auto-computed from content
+  })
+  .spacer(16)
+  .hr()
+  .spacer(16)
+
+  // Table — manual widths for comparison
+  .h2("Table — manual column widths")
+  .spacer(4)
+  .table({
+    headers: ["Product", "Quantity", "Unit Price", "Total"],
+    rows: [
+      ["Widget Pro",    "5",  "$19.99",  "$99.95"],
+      ["Gadget Deluxe", "2",  "$49.50",  "$99.00"],
+      ["Thingamajig",   "10", "$4.95",   "$49.50"],
+      ["Doohickey",     "1",  "$149.00", "$149.00"],
+    ],
+    striped: true,
+    widths:  [0.4, 0.15, 0.2, 0.25],
+    headerBg: "#2c3e50",
+  })
+  .spacer(16)
+  .hr()
+  .spacer(16)
+
+  // Sections
+  .h2("Sections")
+  .spacer(4);
+
+pdf.section({ background: "#eff6ff", borderColor: "#93c5fd", padding: 16 }, (s) => {
+  s.h3("Info Section");
+  s.p("This content lives inside a section with a blue background and border. " +
+      "Sections wrap layout elements and advance the cursor automatically.");
+});
+
+pdf.spacer(8);
+
+pdf.section({ background: "#fef9c3", borderColor: "#fde047", padding: 16 }, (s) => {
+  s.h3("Warning Section");
+  s.p("Sections can be nested or stacked. The background, border color, and padding " +
+      "are all customizable. Sections never break across pages — they reserve " +
+      "space before rendering.");
+});
+
+pdf
+  .spacer(16)
+  .hr()
+  .spacer(16)
+
+  // Multi-page — force page break
+  .h2("Multi-page overflow")
+  .spacer(4);
+
+// Add many paragraphs to force page breaks
+for (let i = 1; i <= 12; i++) {
+  pdf.p(
+    `Paragraph ${i}: The quick brown fox jumps over the lazy dog. ` +
+    "Pack my box with five dozen liquor jugs. " +
+    "How valiantly big fjords vex quick waltz nymph.",
+  ).spacer(4);
+}
+
+// Second page content
+pdf
+  .newPage()
+  .h2("Second page — CSS Colors")
+  .spacer(8);
+
+const colors: [string, string][] = [
+  ["#1a1a2e",        "Dark Navy"],
+  ["steelblue",      "Steel Blue"],
+  ["coral",          "Coral"],
+  ["gold",           "Gold"],
+  ["mediumseagreen", "Sea Green"],
+  ["mediumpurple",   "Medium Purple"],
+];
+
+for (const [color, label] of colors) {
+  pdf.p(`  ${label}`, { color, bold: true });
+}
+
+pdf
+  .spacer(16)
+  .hr()
+  .spacer(8)
+  .p("Generated by SaurioPDF 0.1.0 — powered by Krilla/WASM", {
+    size: 9,
+    color: "gray",
+    align: "Center",
+  });
+
+await pdf.save("output.pdf");
+console.log("PDF saved to output.pdf");

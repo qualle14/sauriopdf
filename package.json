@@ -1,0 +1,34 @@
+{
+  "name": "sauriopdf",
+  "version": "0.1.0",
+  "description": "High-performance PDF generation for Deno, Node.js, Bun, and browsers — powered by Rust/WASM (Krilla)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/mod.js",
+      "types": "./dist/mod.d.ts"
+    }
+  },
+  "main": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
+  "files": ["dist", "README.md", "llms.txt", "LICENSE"],
+  "scripts": {
+    "build:wasm": "cd rust-core && cargo build --target wasm32-unknown-unknown --release && wasm-bindgen target/wasm32-unknown-unknown/release/sauriopdf_core.wasm --out-dir ../wasm --target web",
+    "build:ts":   "tsc --project tsconfig.npm.json && node -e \"require('fs').cpSync('wasm', 'dist/wasm', {recursive:true})\"",
+    "build":      "npm run build:wasm && npm run build:ts",
+    "prepublishOnly": "npm run build:ts"
+  },
+  "keywords": [
+    "pdf", "generator", "deno", "bun", "node", "browser",
+    "wasm", "webassembly", "rust", "krilla", "typescript",
+    "fonts", "table", "layout"
+  ],
+  "author": "SaurioPDF Contributors",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=18.0.0" },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0"
+  },
+  "publishConfig": { "access": "public" }
+}

@@ -1,0 +1,500 @@
+# SaurioPDF — LLM Reference
+
+PDF generation library for Deno, Node.js, Bun, and browsers.
+Rust/WASM core (Krilla) + TypeScript builder API.
+JSR: jsr:@sauriopdf/core  |  npm: sauriopdf
+
+---
+
+## SETUP
+
+**Deno / JSR**
+```ts
+import { init, PDF, loadLiberationSans } from "jsr:@sauriopdf/core";
+
+// Always call init() first — loads the WASM module
+await init();
+```
+
+**Node.js / Bun (npm)**
+```ts
+import { init, PDF } from "sauriopdf";   // npm install sauriopdf
+
+// init() detects Node.js automatically and reads the .wasm file via fs.readFileSync.
+// No fetch(), no extra config needed. Requires Node.js >= 18.
+await init();
+```
+
+**Browser (via esm.sh or bundler)**
+```html
+<script type="module">
+  import { init, PDF } from "https://esm.sh/sauriopdf@0.1.0";
+
+  await init(); // loads WASM via fetch() automatically
+
+  const pdf = new PDF({ title: "My Doc" });
+  pdf.h1("Hello from browser");
+  const bytes = await pdf.generate();
+
+  // Download
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "doc.pdf"; a.click();
+  URL.revokeObjectURL(url);
+</script>
+```
+
+PDF generation happens 100% client-side via WASM — no server needed.
+Liberation Sans is embedded in the WASM, so no font loading required in browser.
+Edge runtimes (Cloudflare Workers, Vercel Edge, Deno Deploy) are NOT supported — WASM is too large.
+
+**General notes**
+```ts
+// init() is idempotent — safe to call multiple times, initializes only once.
+// loadLiberationSans() is OPTIONAL — Liberation Sans is embedded in the WASM.
+// Call it only if you need to load fonts from a custom path.
+await loadLiberationSans(); // uses default embedded path
+```
+
+---
+
+## PDF CLASS
+
+```ts
+const pdf = new PDF(opts?: PDFOptions);
+
+interface PDFOptions {
+  title?:       string;
+  author?:      string;
+  subject?:     string;
+  keywords?:    string[];
+  pageSize?:    "A4" | "A3" | "A5" | "Letter" | "Legal" | "Tabloid"; // default: "A4"
+  orientation?: "Portrait" | "Landscape";                             // default: "Portrait"
+  margin?:      number | { top: number; right: number; bottom: number; left: number }; // default: 72
+  pdfa?:        "1a" | "1b" | "2a" | "2b" | "2u" | "3a" | "3b" | "3u";
+}
+```
+
+---
+
+## OUTPUT
+
+```ts
+// Write to file (Deno, Node.js, Bun)
+await pdf.save("output.pdf");
+
+// Get bytes (all runtimes — Deno, Node, Bun, Browser)
+const bytes: Uint8Array = await pdf.generate();
+```
+
+---
+
+## LAYOUT MODE (auto-cursor, auto page-break)
+
+All layout methods return `this` for chaining.
+
+```ts
+pdf.h1("Title")                            // 28pt bold
+pdf.h2("Subtitle")                         // 22pt bold
+pdf.h3("Section")                          // 17pt bold
+pdf.h4("Subsection")                       // 14pt bold
+
+pdf.p("Text", {
+  size?:       number,    // default: 11
+  color?:      ColorInput,
+  align?:      "Left" | "Center" | "Right" | "Justify",
+  bold?:       boolean,
+  italic?:     boolean,
+  lineHeight?: number,    // multiplier, default: 1.4
+  font?:       string,    // default: "Liberation Sans"
+})
+
+pdf.spacer(16)            // vertical gap in points (default: 16)
+pdf.hr({ color?, width? })  // horizontal rule
+pdf.newPage()             // force new page
+
+pdf.img(data: Uint8Array, opts?: {
+  width?:  number,
+  height?: number,
+  align?:  "Left" | "Center" | "Right",
+})
+// Inserts an image at the current cursor position.
+// PNG, JPEG, and WebP are auto-detected from magic bytes.
+```
+
+---
+
+## TABLE
+
+```ts
+pdf.table({
+  headers?: string[],       // optional header row
+  rows: string[][],         // data rows
+  widths?: number[],        // per-column widths:
+                            //   ≤1 = fraction of content width (e.g. 0.4 = 40%)
+                            //   >1 = absolute points
+                            //   omit = auto-computed from content
+  striped?: boolean,        // alternate row backgrounds
+  borders?: boolean,        // grid lines (default: true)
+  fontSize?: number,        // default: 11
+  cellPadding?: number,     // default: 6
+  rowHeight?: number,       // override auto row height
+  headerBg?: ColorInput,    // default: "#2c3e50"
+  headerColor?: ColorInput, // default: "#ffffff"
+  stripedBg?: ColorInput,   // default: "#f4f6f8"
+  rowBg?: ColorInput,       // uniform row background (use striped instead for alternating)
+  textColor?: ColorInput,   // default: "#111111"
+})
+```
+
+Tables auto-paginate — rows that don't fit are carried to the next page.
+Row heights are dynamic — computed from wrapped cell content.
+
+---
+
+## SECTION
+
+A boxed region with optional background and border. Supports all layout methods inside.
+
+```ts
+pdf.section(
+  {
+    background?:  ColorInput,
+    borderColor?: ColorInput,
+    padding?:     number | { top: number; right: number; bottom: number; left: number },
+                  // default: 12
+    radius?:      number,   // border radius (visual only, not currently rendered)
+  },
+  (s: PDF) => {
+    s.h3("Section Title");
+    s.p("Content inside the section.");
+    s.table({ ... });       // tables work inside sections too
+  }
+)
+```
+
+Sections reserve space before rendering — they never break across pages.
+
+---
+
+## HEADER / FOOTER
+
+Set before adding content. Both repeat on every page.
+
+```ts
+pdf.header(height: number, (ctx: HFContext) => void)
+pdf.footer(height: number, (ctx: HFContext) => void)
+
+interface HFContext {
+  pageNum:    number;   // 1-indexed
+  totalPages: number;   // always correct — injected after all pages committed
+  width:      number;   // full page width
+  height:     number;   // band height (as passed to header/footer)
+  add(...items): void;  // same as pdf.add()
+}
+```
+
+Coordinate system: (0, 0) = top-left of the band.
+Header band: y=0 to y=height, at top of page.
+Footer band: y=0 to y=height, at bottom of page.
+
+```ts
+// Example
+pdf.header(36, (ctx) => {
+  ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
+  ctx.add(text("My Report").at(24, 24).size(13).bold().color("white"));
+});
+
+pdf.footer(24, (ctx) => {
+  ctx.add(
+    text(`Page ${ctx.pageNum} of ${ctx.totalPages}`)
+      .at(0, 8).size(9).color("gray").align("Center").maxWidth(ctx.width)
+  );
+});
+```
+
+---
+
+## MANUAL MODE
+
+Place elements at explicit coordinates. Can be mixed with layout mode.
+
+```ts
+pdf.add(...items: (Buildable | RawElement | Array<...>)[])
+```
+
+---
+
+## ELEMENT BUILDERS
+
+Import individually:
+```ts
+import { text, rect, circle, line, path, image, link } from "jsr:@sauriopdf/core";
+```
+
+### text(content, x?, y?, size?)
+```ts
+text("Hello", 50, 100, 14)
+  .at(x, y)
+  .size(n)
+  .bold()
+  .italic()
+  .color(ColorInput)
+  .align("Left" | "Center" | "Right" | "Justify")
+  .center()             // shortcut for .align("Center")
+  .right()              // shortcut for .align("Right")
+  .maxWidth(n)          // enables text wrapping
+  .opacity(0..1)
+  .font("Liberation Sans")
+```
+
+IMPORTANT: `.maxWidth()` enables wrapping. Without it, text is single-line.
+When using text() inside header/footer ctx.add(), set maxWidth for centering to work.
+
+### rect(x, y, w, h, opts?)
+```ts
+rect(50, 100, 200, 80)
+  .fill(ColorInput)
+  .stroke(ColorInput, strokeWidth?)
+  .strokeWidth(n)
+  .round(radius?)       // rounded corners, default radius: 8
+  .at(x, y)
+  .dimensions(w, h)
+```
+
+### circle(x, y, radius, opts?)
+```ts
+circle(297, 400, 60)
+  .fill(ColorInput)
+  .stroke(ColorInput, strokeWidth?)
+  .at(x, y)
+  .radius(n)
+```
+
+### line(x1, y1, x2, y2, opts?)
+```ts
+line(50, 200, 545, 200)
+  .color(ColorInput)
+  .width(n)
+```
+
+### path(points, opts?)
+```ts
+path([[50,100],[200,100],[125,200]])
+  .fill(ColorInput)
+  .stroke(ColorInput, width?)
+  .closed(true)         // default: true
+  .open()               // shortcut for .closed(false)
+```
+
+### image(data, opts?)
+```ts
+// data: Uint8Array — PNG, JPEG, or WebP (auto-detected from magic bytes)
+image(pngBytes)
+  .at(x, y)
+  .width(n)
+  .height(n)
+  .size(w, h)
+```
+
+### link(url, x, y, w, h)
+```ts
+// Clickable annotation overlay — place over text to make it a hyperlink
+link("https://example.com", 50, 450, 200, 18)
+```
+
+---
+
+## COLOR INPUT
+
+```ts
+type ColorInput =
+  | string                               // CSS name: "steelblue", "coral", "transparent"
+  | string                               // hex: "#rgb", "#rrggbb", "#rrggbbaa"
+  | [r: number, g: number, b: number]    // RGB 0-255
+  | [r: number, g: number, b: number, a: number]  // RGBA: rgb 0-255, a 0.0-1.0
+```
+
+100+ CSS named colors supported (same set as CSS Color Level 4).
+
+---
+
+## PAGE SIZES (in points, 1pt = 1/72 inch)
+
+```
+A4:      595 × 842
+A3:      842 × 1191
+A5:      420 × 595
+Letter:  612 × 792
+Legal:   612 × 1008
+Tabloid: 792 × 1224
+```
+
+Content area = page − margins (default 72pt each side).
+
+---
+
+## PDF/A
+
+```ts
+// Constructor option
+const pdf = new PDF({ pdfa: "2b" });
+
+// Fluent method
+pdf.conformsTo("2b");
+
+// Levels: "1a", "1b", "2a", "2b", "2u", "3a", "3b", "3u"
+// "2b" is the most common for archival use
+```
+
+---
+
+## FONT LOADING
+
+```ts
+import { loadLiberationSans, loadFonts, loadFont } from "jsr:@sauriopdf/core";
+
+// Load Liberation Sans from a directory (Deno/Node/Bun/Browser)
+await loadLiberationSans("fonts/liberation-fonts-ttf-2.1.5");
+
+// Load a custom font family from Uint8Array
+await loadFont("Helvetica", normalBytes, boldBytes?, italicBytes?, boldItalicBytes?);
+
+// Load multiple fonts at once
+await loadFonts([
+  { name: "MyFont", normal: normalBytes, bold: boldBytes },
+]);
+```
+
+Liberation Sans is always available — it's embedded in the WASM binary at build time.
+Font subsetting is automatic — Krilla only embeds glyphs actually used in the document.
+
+---
+
+## COMPLETE EXAMPLE — Invoice
+
+```ts
+import { init, PDF, loadLiberationSans, text, rect } from "jsr:@sauriopdf/core";
+
+await init();
+
+const pdf = new PDF({ title: "Invoice #1042", author: "Acme Corp" });
+
+// Header on every page
+pdf.header(48, (ctx) => {
+  ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
+  ctx.add(text("ACME CORP").at(24, 16).size(16).bold().color("white"));
+  ctx.add(text("Invoice").at(ctx.width - 80, 16).size(14).color("#94a3b8"));
+});
+
+// Footer with page numbers
+pdf.footer(24, (ctx) => {
+  ctx.add(
+    text(`Page ${ctx.pageNum} of ${ctx.totalPages}`)
+      .at(0, 8).size(9).color("gray").align("Center").maxWidth(ctx.width)
+  );
+});
+
+pdf
+  .h1("Invoice #1042")
+  .spacer(4)
+  .p("Date: March 1, 2026  |  Due: March 31, 2026", { color: "slategray" })
+  .spacer(16)
+
+  .section({ background: "#f8fafc", padding: 12 }, (s) => {
+    s.p("Bill To:", { bold: true, size: 10, color: "slategray" });
+    s.p("Globex Corporation\n742 Evergreen Terrace\nSpringfield, USA");
+  })
+  .spacer(16)
+
+  .table({
+    headers: ["Description", "Qty", "Unit Price", "Total"],
+    rows: [
+      ["Widget Pro",         "5",  "$19.99",  "$99.95"],
+      ["Consulting (hr)",    "3",  "$150.00", "$450.00"],
+      ["Support Package",    "1",  "$299.00", "$299.00"],
+    ],
+    striped:   true,
+    headerBg:  "#1a1a2e",
+    widths:    [0.45, 0.1, 0.2, 0.25],
+  })
+  .spacer(8)
+  .p("Total: $848.95", { bold: true, align: "Right", size: 13 })
+  .spacer(24)
+  .p("Payment due within 30 days. Thank you for your business.", {
+    color: "slategray",
+    align: "Center",
+  });
+
+await pdf.save("invoice.pdf");
+```
+
+---
+
+## COMMON PATTERNS
+
+### Center text on page
+```ts
+pdf.p("Centered text", { align: "Center" });
+// or in manual mode:
+pdf.add(text("Centered").at(margin, y).size(14).center().maxWidth(contentWidth));
+```
+
+### Full-width colored header band
+```ts
+pdf.add(rect(0, 0, 595, 80).fill("#1a1a2e"));
+pdf.add(text("Title").at(72, 50).size(24).bold().color("white"));
+```
+
+### Page break before a section
+```ts
+pdf.newPage().h2("New Chapter");
+```
+
+### Landscape document
+```ts
+const pdf = new PDF({ pageSize: "A4", orientation: "Landscape" });
+// Page is now 842 × 595
+```
+
+### Image in layout
+```ts
+const imageBytes = await Deno.readFile("logo.png");
+pdf.img(imageBytes, { width: 200, height: 100 });
+```
+
+### Clickable text link
+```ts
+// Draw the text, then overlay a link annotation at the same position
+pdf.add(text("Visit our website").at(72, 300).size(11).color("steelblue"));
+pdf.add(link("https://example.com", 72, 285, 160, 18));
+```
+
+---
+
+## ARCHITECTURE NOTES (for contributors)
+
+- ALL layout math (cursor, wrapping, alignment, tables) is in TypeScript
+- Krilla/Rust only receives pre-positioned elements via JSON
+- Text wrapping: TypeScript calls wrapLines() → one RawElement per line
+- Alignment: computed as x-offset before sending to Rust
+- Tables: decomposed into rects + lines + text elements in TypeScript
+- Font subsetting: automatic in Krilla (tracks glyphs during draw_text, subsets on finish())
+- Page coordinate system: (0,0) = top-left, y increases downward, unit = points
+- Coordinate space: absolute page coordinates (not relative to margins)
+- Header/footer elements injected AFTER all pages committed (so totalPages is known)
+
+Source layout:
+  mod.ts            — main entry point
+  src/types.ts      — all types
+  src/colors.ts     — CSS color parsing
+  src/layout.ts     — wrapLines(), alignmentOffset(), estimateTextHeight()
+  src/elements.ts   — TextElement, RectElement, CircleElement, LineElement, PathElement, ImageElement, LinkElement
+  src/table.ts      — buildTableElements() + autoColWidths()
+  src/pdf.ts        — PDF class, shiftEl(), quickPDF()
+  src/wasm.ts       — WASM singleton init
+  lib/font-loader.ts — universal font loading (Deno/Node/Browser)
+  rust-core/        — Rust/WASM source (Krilla)
+  wasm/             — compiled WASM output (committed)
+  fonts/            — Liberation Sans TTF files (embedded via include_bytes!)
