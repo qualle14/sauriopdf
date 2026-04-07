@@ -74,4 +74,4 @@ export type { FontConfig } from "./lib/font-loader-slim.ts";
 export { Font } from "./src/fonts.ts";
 export type { BuiltinFont } from "./src/fonts.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";

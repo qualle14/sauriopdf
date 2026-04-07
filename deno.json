@@ -1,6 +1,6 @@
 {
   "name": "@sauriopdf/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "exports": {
     ".": "./mod.ts",
     "./slim": "./mod.slim.ts"

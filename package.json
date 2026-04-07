@@ -1,6 +1,6 @@
 {
   "name": "sauriopdf",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "High-performance PDF generation for Deno, Node.js, Bun, and browsers — powered by Rust/WASM (Krilla)",
   "type": "module",
   "exports": {
