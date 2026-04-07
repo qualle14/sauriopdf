@@ -1,7 +1,6 @@
 /**
- * SaurioPDF — slim build entry point (~2.5 MB WASM, no embedded fonts).
+ * SaurioPDF — slim build entry point (~2.7 MB WASM, no embedded fonts).
  *
- * Requires running `deno task build:wasm:slim` first.
  * You MUST load at least one font before generating PDFs:
  *
  * @example
