@@ -8,9 +8,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # required for npm OIDC trusted publishing
 
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: https://registry.npmjs.org
 
       - name: Install dev dependencies
         run: npm install --ignore-scripts
@@ -33,4 +31,6 @@ jobs:
         run: npm run build:ts
 
       - name: Publish to npm
-        run: npm publish --provenance --access public --ignore-scripts
+        run: npm publish --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
