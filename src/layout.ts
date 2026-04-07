@@ -35,18 +35,33 @@ export function wrapLines(
 
     for (const word of words) {
       if (!current) {
-        current = word;
+        // Place word at start of line, breaking if it overflows
+        const chunks = chunkWord(word, charsPerLine);
+        for (let i = 0; i < chunks.length - 1; i++) result.push(chunks[i]);
+        current = chunks[chunks.length - 1];
       } else if (current.length + 1 + word.length <= charsPerLine) {
         current += " " + word;
       } else {
         result.push(current);
-        current = word;
+        const chunks = chunkWord(word, charsPerLine);
+        for (let i = 0; i < chunks.length - 1; i++) result.push(chunks[i]);
+        current = chunks[chunks.length - 1];
       }
     }
     if (current) result.push(current);
   }
 
   return result.length > 0 ? result : [""];
+}
+
+/** Split a word into chunks of at most `max` characters. */
+function chunkWord(word: string, max: number): string[] {
+  if (word.length <= max) return [word];
+  const chunks: string[] = [];
+  for (let i = 0; i < word.length; i += max) {
+    chunks.push(word.slice(i, i + max));
+  }
+  return chunks;
 }
 
 /** Estimate the rendered width of a single line of text */

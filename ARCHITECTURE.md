@@ -1,14 +1,21 @@
 # SaurioPDF — Architecture & Design
 
-For the skeptical developer who wants to understand what's actually happening before trusting a library with their PDFs.
+For the skeptical developer who wants to understand what's actually happening before
+trusting a library with their PDFs.
 
 ---
 
 ## Why Rust/WASM instead of pure TypeScript?
 
-PDF is a complex binary format. Pure-JS libraries (jsPDF, pdfmake, pdf-lib) implement the PDF spec themselves — font parsing, glyph encoding, content streams, compression, cross-reference tables. That's a lot of code to trust, and historically it shows: inconsistent kerning, broken Unicode, missing features, subtle rendering bugs.
+PDF is a complex binary format. Pure-JS libraries (jsPDF, pdfmake, pdf-lib) implement
+the PDF spec themselves — font parsing, glyph encoding, content streams, compression,
+cross-reference tables. That's a lot of code to trust, and historically it shows:
+inconsistent kerning, broken Unicode, missing features, subtle rendering bugs.
 
-SaurioPDF delegates all of that to [Krilla](https://github.com/LaurenzV/krilla), a Rust library that compiles to WebAssembly. Krilla handles the PDF spec correctly and is tested against real PDF viewers. We get correctness for free; our job is the TypeScript API on top.
+SaurioPDF delegates all of that to [Krilla](https://github.com/LaurenzV/krilla), a Rust
+library that compiles to WebAssembly. Krilla handles the PDF spec correctly and is
+tested against real PDF viewers. We get correctness for free; our job is the TypeScript
+API on top.
 
 The trade-off: a 4.2MB WASM binary. Downloaded once, cached by Deno/Node.
 
@@ -44,7 +51,8 @@ The trade-off: a 4.2MB WASM binary. Downloaded once, cached by Deno/Node.
               pdf.generate() → Uint8Array
 ```
 
-**Key insight:** Rust never does layout. TypeScript never writes PDF bytes. The boundary between them is a JSON string.
+**Key insight:** Rust never does layout. TypeScript never writes PDF bytes. The boundary
+between them is a JSON string.
 
 ---
 
@@ -106,9 +114,11 @@ The full document envelope:
 
 ## Text wrapping — why it's done in TypeScript
 
-Krilla's `draw_text()` draws a string at a single point. No wrapping, no alignment — just a baseline position. This is correct behavior for a low-level renderer.
+Krilla's `draw_text()` draws a string at a single point. No wrapping, no alignment —
+just a baseline position. This is correct behavior for a low-level renderer.
 
-So every multi-line paragraph becomes multiple `draw_text` calls, one per line, with x/y already computed:
+So every multi-line paragraph becomes multiple `draw_text` calls, one per line, with x/y
+already computed:
 
 ```
 "The quick brown fox jumps over the lazy dog. Pack my box..."
@@ -127,7 +137,9 @@ offset = (contentWidth - lineWidth) / 2 ≈ 203pt
 → Text element at (72 + 203, y)
 ```
 
-The estimation uses average character widths (`fontSize × 0.52` for regular, `× 0.58` for bold). Not pixel-perfect, but accurate enough for layout decisions — and Krilla handles the actual glyph placement.
+The estimation uses average character widths (`fontSize × 0.52` for regular, `× 0.58`
+for bold). Not pixel-perfect, but accurate enough for layout decisions — and Krilla
+handles the actual glyph placement.
 
 ---
 
@@ -147,7 +159,9 @@ buildTableElements()  (src/table.ts)
 [...RawElement]  — flat list of primitives sent to Rust
 ```
 
-Row heights are dynamic: computed by wrapping each cell's text and taking the maximum line count across the row. This means a cell with long content makes the entire row taller, which is the correct behavior.
+Row heights are dynamic: computed by wrapping each cell's text and taking the maximum
+line count across the row. This means a cell with long content makes the entire row
+taller, which is the correct behavior.
 
 ---
 
@@ -159,15 +173,20 @@ Row heights are dynamic: computed by wrapping each cell's text and taking the ma
 - Coordinates are **absolute** — not relative to margins
 - A4 page: 595 × 842 pt
 
-The layout cursor starts at `margin.top` and advances downward. Elements are placed at absolute coordinates — the cursor is purely a TypeScript concept.
+The layout cursor starts at `margin.top` and advances downward. Elements are placed at
+absolute coordinates — the cursor is purely a TypeScript concept.
 
 ---
 
 ## Font subsetting
 
-Liberation Sans (Regular, Bold, Italic, Bold Italic) is compiled into the WASM binary via Rust's `include_bytes!` macro. Users never deal with font files.
+Liberation Sans (Regular, Bold, Italic, Bold Italic) is compiled into the WASM binary
+via Rust's `include_bytes!` macro. Users never deal with font files.
 
-Subsetting is automatic — Krilla tracks every glyph drawn during rendering, then on `document.finish()` it calls the `subsetter` crate to strip unused glyphs before embedding. A document using 40 distinct characters embeds ~40 glyphs worth of font data, not 1800.
+Subsetting is automatic — Krilla tracks every glyph drawn during rendering, then on
+`document.finish()` it calls the `subsetter` crate to strip unused glyphs before
+embedding. A document using 40 distinct characters embeds ~40 glyphs worth of font data,
+not 1800.
 
 This happens entirely inside Krilla. No TypeScript-side character tracking needed.
 
@@ -175,7 +194,9 @@ This happens entirely inside Krilla. No TypeScript-side character tracking neede
 
 ## Links (two-pass rendering)
 
-Krilla separates page content from annotations. Links can't be part of the surface drawing pass — they must be added as page-level annotations afterward. So Rust does two passes per page:
+Krilla separates page content from annotations. Links can't be part of the surface
+drawing pass — they must be added as page-level annotations afterward. So Rust does two
+passes per page:
 
 ```rust
 // Pass 1: draw everything except links
@@ -199,7 +220,8 @@ for element in &page.content {
 
 ## Headers and footers
 
-Header/footer callbacks run after all content pages are committed — this is the only way `totalPages` can be known at the time the header/footer renders.
+Header/footer callbacks run after all content pages are committed — this is the only way
+`totalPages` can be known at the time the header/footer renders.
 
 ```
 pdf.h1("...").p("...").table(...)...
@@ -219,7 +241,12 @@ pdf.generate()
 
 ## Sections
 
-`pdf.section()` creates a sub-PDF instance with the same page dimensions but with an adjusted top margin (= current cursor position + padding) and an infinite page height so it never triggers a page break internally. After the callback runs, all elements from the sub-PDF's current page are collected and injected into the parent page — they're already in absolute page coordinates because the sub-PDF's margin matches the parent's coordinate space.
+`pdf.section()` creates a sub-PDF instance with the same page dimensions but with an
+adjusted top margin (= current cursor position + padding) and an infinite page height so
+it never triggers a page break internally. After the callback runs, all elements from
+the sub-PDF's current page are collected and injected into the parent page — they're
+already in absolute page coordinates because the sub-PDF's margin matches the parent's
+coordinate space.
 
 ---
 
@@ -265,23 +292,32 @@ npm run build       # build:wasm + build:ts (needs Rust toolchain)
 ```
 
 **Node.js WASM loading**: `wasm-bindgen --target web` generates code that calls
-`fetch(new URL('...bg.wasm', import.meta.url))`. Node.js 18+ `fetch()` doesn't
-support `file://` URLs. `src/wasm.ts` detects Node.js at runtime and reads the
-`.wasm` file with `fs.readFileSync`, passing the `Buffer` (a `Uint8Array` subclass)
-directly to `wasmInit()`. Deno and browsers still use the default URL-based path.
+`fetch(new URL('...bg.wasm', import.meta.url))`. Node.js 18+ `fetch()` doesn't support
+`file://` URLs. `src/wasm.ts` detects Node.js at runtime and reads the `.wasm` file with
+`fs.readFileSync`, passing the `Buffer` (a `Uint8Array` subclass) directly to
+`wasmInit()`. Deno and browsers still use the default URL-based path.
 
 ---
 
 ## Why not wasm-pack?
 
-`wasm-pack` bundles for npm by default. We need Deno-first with a `--target web` output so `import.meta.url` resolves the WASM correctly in both Deno (file://) and browsers (https://). Doing `cargo build` + `wasm-bindgen` manually gives us that control without wasm-pack's opinionated bundling.
+`wasm-pack` bundles for npm by default. We need Deno-first with a `--target web` output
+so `import.meta.url` resolves the WASM correctly in both Deno (file://) and browsers
+(https://). Doing `cargo build` + `wasm-bindgen` manually gives us that control without
+wasm-pack's opinionated bundling.
 
 ---
 
 ## What's not implemented
 
-- **Custom fonts beyond Liberation Sans** — works via `loadFont()`, but the TypeScript layout engine's width estimates are calibrated for Liberation Sans. Other fonts may wrap differently.
-- **Right-to-left text** — Krilla supports `TextDirection::Auto` which handles RTL scripts at the glyph level, but the line-breaking logic in TypeScript is LTR-only.
-- **Images as base64** — image data is sent as a JSON array of integers. Large images are expensive to serialize. A future improvement would be to pass image data as a separate binary buffer outside of JSON.
+- **Custom fonts beyond Liberation Sans** — works via `loadFont()`, but the TypeScript
+  layout engine's width estimates are calibrated for Liberation Sans. Other fonts may
+  wrap differently.
+- **Right-to-left text** — Krilla supports `TextDirection::Auto` which handles RTL
+  scripts at the glyph level, but the line-breaking logic in TypeScript is LTR-only.
+- **Images as base64** — image data is sent as a JSON array of integers. Large images
+  are expensive to serialize. A future improvement would be to pass image data as a
+  separate binary buffer outside of JSON.
 - **Table cell spanning** — colspan/rowspan not implemented. Tables are strictly a grid.
-- **Actual border radius** — the `radius` field on sections and rects exists in the API but Krilla renders rectangles with straight corners currently.
+- **Actual border radius** — the `radius` field on sections and rects exists in the API
+  but Krilla renders rectangles with straight corners currently.

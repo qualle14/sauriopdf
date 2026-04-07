@@ -32,33 +32,57 @@ impl FontManager {
         }
     }
 
-    /// Load embedded default fonts (Liberation Sans — 4 variants).
+    /// Load embedded default fonts (Liberation Sans + Mono, 4 variants each).
     /// Font bytes are compiled into the binary via include_bytes!.
+    /// No-op when built without the `embedded-fonts` feature (slim build).
     pub fn load_embedded_fonts(&mut self) -> Result<()> {
         if self.embedded_fonts_loaded {
             return Ok(());
         }
 
-        self.fonts.insert(
-            "Liberation Sans".to_string(),
-            FontFamily {
-                name: "Liberation Sans".to_string(),
-                normal: Some(
-                    include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Regular.ttf").to_vec(),
-                ),
-                bold: Some(
-                    include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Bold.ttf").to_vec(),
-                ),
-                italic: Some(
-                    include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Italic.ttf").to_vec(),
-                ),
-                bold_italic: Some(
-                    include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-BoldItalic.ttf").to_vec(),
-                ),
-            },
-        );
+        #[cfg(feature = "embedded-fonts")]
+        {
+            self.fonts.insert(
+                "Liberation Sans".to_string(),
+                FontFamily {
+                    name: "Liberation Sans".to_string(),
+                    normal: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Regular.ttf").to_vec(),
+                    ),
+                    bold: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Bold.ttf").to_vec(),
+                    ),
+                    italic: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-Italic.ttf").to_vec(),
+                    ),
+                    bold_italic: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationSans-BoldItalic.ttf").to_vec(),
+                    ),
+                },
+            );
 
-        self.embedded_fonts_loaded = true;
+            self.fonts.insert(
+                "Liberation Mono".to_string(),
+                FontFamily {
+                    name: "Liberation Mono".to_string(),
+                    normal: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationMono-Regular.ttf").to_vec(),
+                    ),
+                    bold: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationMono-Bold.ttf").to_vec(),
+                    ),
+                    italic: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationMono-Italic.ttf").to_vec(),
+                    ),
+                    bold_italic: Some(
+                        include_bytes!("../../fonts/liberation-fonts-ttf-2.1.5/LiberationMono-BoldItalic.ttf").to_vec(),
+                    ),
+                },
+            );
+
+            self.embedded_fonts_loaded = true;
+        }
+
         Ok(())
     }
 

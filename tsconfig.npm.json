@@ -14,7 +14,7 @@
   },
   "include": [
     "mod.ts",
-    "pdf-builder.ts",
+    "mod.slim.ts",
     "src/**/*.ts",
     "lib/**/*.ts"
   ],

@@ -1,35 +1,18 @@
 /**
- * Font Loader — universal (Deno, Node.js, Browser).
- * Reads font files from the filesystem or via fetch, then registers
- * them with the WASM module so Krilla can use them for rendering.
+ * Font Loader — slim build variant.
+ * Identical to font-loader.ts but registers fonts into the slim WASM instance.
  */
 
-import { registerFont } from "../wasm/sauriopdf_core.js";
+import { registerFont } from "../wasm-slim/sauriopdf_core.js";
 
-export interface FontConfig {
-  name: string;
-  path: string;
-}
+export type { FontConfig } from "./font-loader.ts";
 
-/**
- * Load all built-in fonts (Liberation Sans + Mono, 4 variants each).
- * Resolves the bundled font path automatically — no configuration needed.
- * Intended for the slim build where fonts are not embedded in the WASM.
- *
- * @example
- * ```ts
- * import { init, PDF, loadBuiltinFonts } from "@sauriopdf/core/slim";
- * await init();
- * await loadBuiltinFonts();
- * ```
- */
 export async function loadBuiltinFonts(): Promise<void> {
   const base = new URL("../fonts/liberation-fonts-ttf-2.1.5", import.meta.url).href;
   await loadLiberationSans(base);
   await loadLiberationMono(base);
 }
 
-/** Load Liberation Sans (4 variants: regular, bold, italic, bold-italic) */
 export async function loadLiberationMono(
   basePath = "fonts/liberation-fonts-ttf-2.1.5",
 ): Promise<void> {
@@ -37,14 +20,10 @@ export async function loadLiberationMono(
     { name: "Liberation Mono", path: `${basePath}/LiberationMono-Regular.ttf` },
     { name: "Liberation Mono Bold", path: `${basePath}/LiberationMono-Bold.ttf` },
     { name: "Liberation Mono Italic", path: `${basePath}/LiberationMono-Italic.ttf` },
-    {
-      name: "Liberation Mono Bold Italic",
-      path: `${basePath}/LiberationMono-BoldItalic.ttf`,
-    },
+    { name: "Liberation Mono Bold Italic", path: `${basePath}/LiberationMono-BoldItalic.ttf` },
   ]);
 }
 
-/** Load Liberation Sans (4 variants: regular, bold, italic, bold-italic) */
 export async function loadLiberationSans(
   basePath = "fonts/liberation-fonts-ttf-2.1.5",
 ): Promise<void> {
@@ -52,28 +31,25 @@ export async function loadLiberationSans(
     { name: "Liberation Sans", path: `${basePath}/LiberationSans-Regular.ttf` },
     { name: "Liberation Sans Bold", path: `${basePath}/LiberationSans-Bold.ttf` },
     { name: "Liberation Sans Italic", path: `${basePath}/LiberationSans-Italic.ttf` },
-    {
-      name: "Liberation Sans Bold Italic",
-      path: `${basePath}/LiberationSans-BoldItalic.ttf`,
-    },
+    { name: "Liberation Sans Bold Italic", path: `${basePath}/LiberationSans-BoldItalic.ttf` },
   ]);
 }
 
-/** Load multiple fonts from file paths (or URLs in the browser) */
-export async function loadFonts(fonts: FontConfig[]): Promise<void> {
+export async function loadFonts(
+  fonts: { name: string; path: string }[],
+): Promise<void> {
   for (const font of fonts) {
     const data = await readBytes(font.path);
     registerFont(font.name, data);
   }
 }
 
-/** Load a single font by name and path */
 export async function loadFont(name: string, path: string): Promise<void> {
   const data = await readBytes(path);
   registerFont(name, data);
 }
 
-// ── Runtime-agnostic file reader ───────────────────────────────────────────────
+// ── Runtime-agnostic file reader (shared logic) ───────────────────────────────
 
 async function readBytes(path: string): Promise<Uint8Array> {
   const isFileUrl = path.startsWith("file:");
@@ -83,12 +59,10 @@ async function readBytes(path: string): Promise<Uint8Array> {
     | { readFile(p: string | URL): Promise<Uint8Array> }
     | undefined;
 
-  // Deno — pass URL object when given a file:// URL so Deno resolves it correctly
   if (_Deno !== undefined) {
     return _Deno.readFile(isFileUrl ? new URL(path) : path);
   }
 
-  // Node.js
   // deno-lint-ignore no-explicit-any
   const _process = (globalThis as any).process;
   if (
@@ -104,7 +78,6 @@ async function readBytes(path: string): Promise<Uint8Array> {
     return new Uint8Array(await readFile(path));
   }
 
-  // Browser / other (fetch)
   const resp = await fetch(path);
   if (!resp.ok) {
     throw new Error(`Failed to load font "${path}": HTTP ${resp.status}`);

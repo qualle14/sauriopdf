@@ -4,7 +4,7 @@
  * Útil para credenciales, tarjetas, tickets, diplomas, etc.
  */
 
-import { init, PDF, text, rect, circle, line } from "./mod.ts";
+import { circle, init, line, PDF, rect, text } from "./mod.ts";
 
 await init();
 
@@ -14,7 +14,7 @@ const H = 153;
 
 const pdf = new PDF({
   title: "Gafete Empleado",
-  pageSize: "A4",      // página A4 normal
+  pageSize: "A4", // página A4 normal
   margin: 72,
 });
 

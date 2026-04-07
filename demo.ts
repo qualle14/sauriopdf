@@ -3,7 +3,7 @@
  * Run: deno run --allow-read --allow-write demo.ts
  */
 
-import { init, PDF, loadLiberationSans, text, rect } from "./mod.ts";
+import { init, loadLiberationSans, PDF, rect, text } from "./mod.ts";
 
 await init();
 await loadLiberationSans("fonts/liberation-fonts-ttf-2.1.5");
@@ -54,19 +54,17 @@ pdf
   .spacer(16)
   .hr()
   .spacer(16)
-
   // Long paragraph — tests real text wrapping
   .h2("Text Wrapping")
   .spacer(4)
   .p(
     "This paragraph demonstrates automatic text wrapping. Long lines are broken " +
-    "into multiple lines before being sent to the Krilla rendering engine, since " +
-    "Krilla's draw_text() draws at a single point with no built-in wrapping. " +
-    "All layout math — character width estimation, line breaking, and alignment " +
-    "offsets — is computed in TypeScript before the JSON payload reaches Rust.",
+      "into multiple lines before being sent to the Krilla rendering engine, since " +
+      "Krilla's draw_text() draws at a single point with no built-in wrapping. " +
+      "All layout math — character width estimation, line breaking, and alignment " +
+      "offsets — is computed in TypeScript before the JSON payload reaches Rust.",
   )
   .spacer(8)
-
   // Center and right aligned text
   .h3("Alignment")
   .spacer(4)
@@ -76,74 +74,77 @@ pdf
   .spacer(16)
   .hr()
   .spacer(16)
-
   // Table — auto-width heuristic (no widths provided)
   .h2("Table — auto column widths")
   .spacer(4)
-  .p("Column widths below are computed automatically from content, not fixed percentages.", {
-    size: 10,
-    color: "slategray",
-  })
+  .p(
+    "Column widths below are computed automatically from content, not fixed percentages.",
+    {
+      size: 10,
+      color: "slategray",
+    },
+  )
   .spacer(4)
   .table({
     headers: ["Product", "Qty", "Price", "Total"],
     rows: [
-      ["Widget Pro",    "5",  "$19.99", "$99.95"],
-      ["Gadget Deluxe", "2",  "$49.50", "$99.00"],
-      ["Thingamajig",   "10", "$4.95",  "$49.50"],
-      ["Doohickey",     "1",  "$149.00","$149.00"],
+      ["Widget Pro", "5", "$19.99", "$99.95"],
+      ["Gadget Deluxe", "2", "$49.50", "$99.00"],
+      ["Thingamajig", "10", "$4.95", "$49.50"],
+      ["Doohickey", "1", "$149.00", "$149.00"],
     ],
-    striped:  true,
+    striped: true,
     headerBg: "#1a1a2e",
     // no widths: auto-computed from content
   })
   .spacer(16)
   .hr()
   .spacer(16)
-
   // Table — manual widths for comparison
   .h2("Table — manual column widths")
   .spacer(4)
   .table({
     headers: ["Product", "Quantity", "Unit Price", "Total"],
     rows: [
-      ["Widget Pro",    "5",  "$19.99",  "$99.95"],
-      ["Gadget Deluxe", "2",  "$49.50",  "$99.00"],
-      ["Thingamajig",   "10", "$4.95",   "$49.50"],
-      ["Doohickey",     "1",  "$149.00", "$149.00"],
+      ["Widget Pro", "5", "$19.99", "$99.95"],
+      ["Gadget Deluxe", "2", "$49.50", "$99.00"],
+      ["Thingamajig", "10", "$4.95", "$49.50"],
+      ["Doohickey", "1", "$149.00", "$149.00"],
     ],
     striped: true,
-    widths:  [0.4, 0.15, 0.2, 0.25],
+    widths: [0.4, 0.15, 0.2, 0.25],
     headerBg: "#2c3e50",
   })
   .spacer(16)
   .hr()
   .spacer(16)
-
   // Sections
   .h2("Sections")
   .spacer(4);
 
 pdf.section({ background: "#eff6ff", borderColor: "#93c5fd", padding: 16 }, (s) => {
   s.h3("Info Section");
-  s.p("This content lives inside a section with a blue background and border. " +
-      "Sections wrap layout elements and advance the cursor automatically.");
+  s.p(
+    "This content lives inside a section with a blue background and border. " +
+      "Sections wrap layout elements and advance the cursor automatically.",
+  );
 });
 
 pdf.spacer(8);
 
 pdf.section({ background: "#fef9c3", borderColor: "#fde047", padding: 16 }, (s) => {
   s.h3("Warning Section");
-  s.p("Sections can be nested or stacked. The background, border color, and padding " +
+  s.p(
+    "Sections can be nested or stacked. The background, border color, and padding " +
       "are all customizable. Sections never break across pages — they reserve " +
-      "space before rendering.");
+      "space before rendering.",
+  );
 });
 
 pdf
   .spacer(16)
   .hr()
   .spacer(16)
-
   // Multi-page — force page break
   .h2("Multi-page overflow")
   .spacer(4);
@@ -152,8 +153,8 @@ pdf
 for (let i = 1; i <= 12; i++) {
   pdf.p(
     `Paragraph ${i}: The quick brown fox jumps over the lazy dog. ` +
-    "Pack my box with five dozen liquor jugs. " +
-    "How valiantly big fjords vex quick waltz nymph.",
+      "Pack my box with five dozen liquor jugs. " +
+      "How valiantly big fjords vex quick waltz nymph.",
   ).spacer(4);
 }
 
@@ -164,12 +165,12 @@ pdf
   .spacer(8);
 
 const colors: [string, string][] = [
-  ["#1a1a2e",        "Dark Navy"],
-  ["steelblue",      "Steel Blue"],
-  ["coral",          "Coral"],
-  ["gold",           "Gold"],
+  ["#1a1a2e", "Dark Navy"],
+  ["steelblue", "Steel Blue"],
+  ["coral", "Coral"],
+  ["gold", "Gold"],
   ["mediumseagreen", "Sea Green"],
-  ["mediumpurple",   "Medium Purple"],
+  ["mediumpurple", "Medium Purple"],
 ];
 
 for (const [color, label] of colors) {

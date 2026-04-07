@@ -21,8 +21,95 @@ export interface MarginSpec {
   left: number;
 }
 
-/** Raw JSON element sent to Rust via WASM */
-export type RawElement = Record<string, unknown>;
+// ─── Raw element protocol types (mirror of Rust ContentElement) ───────────────
+
+/** Shared point type used in raw elements */
+export interface RawPoint {
+  x: number;
+  y: number;
+}
+
+/** Shared rect type used in raw elements */
+export interface RawRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Shape sub-variants */
+export type RawShapeVariant =
+  | {
+    Rectangle: {
+      rect: RawRect;
+      fill_color: RGBA | null;
+      stroke_color: RGBA | null;
+      stroke_width: number;
+      border_radius: number;
+    };
+  }
+  | {
+    Circle: {
+      center: RawPoint;
+      radius: number;
+      fill_color: RGBA | null;
+      stroke_color: RGBA | null;
+      stroke_width: number;
+    };
+  }
+  | {
+    Line: {
+      start: RawPoint;
+      end: RawPoint;
+      color: RGBA;
+      width: number;
+    };
+  }
+  | {
+    Path: {
+      points: RawPoint[];
+      fill_color: RGBA | null;
+      stroke_color: RGBA | null;
+      stroke_width: number;
+      closed: boolean;
+    };
+  };
+
+/**
+ * Discriminated union of all element types sent to Rust via WASM.
+ * Mirrors Rust's `ContentElement` enum (serde externally-tagged).
+ */
+export type RawElement =
+  | {
+    Text: {
+      content: string;
+      position: RawPoint;
+      font_family: string;
+      font_size: number;
+      color: RGBA;
+      bold: boolean;
+      italic: boolean;
+      align: string;
+      max_width: number | null;
+    };
+  }
+  | {
+    Image: {
+      data: string;
+      position: RawPoint;
+      width: number | null;
+      height: number | null;
+      format: string;
+    };
+  }
+  | { Shape: RawShapeVariant }
+  | {
+    Link: {
+      url: string;
+      rect: RawRect;
+      text: string | null;
+    };
+  };
 
 // ─── Public ───────────────────────────────────────────────────────────────────
 
@@ -47,11 +134,11 @@ export interface Buildable {
 
 /** Page size presets (in points: 1pt = 1/72 inch) */
 export const PAGE_SIZES: Record<string, [number, number]> = {
-  A4:      [595, 842],
-  A3:      [842, 1191],
-  A5:      [420, 595],
-  Letter:  [612, 792],
-  Legal:   [612, 1008],
+  A4: [595, 842],
+  A3: [842, 1191],
+  A5: [420, 595],
+  Letter: [612, 792],
+  Legal: [612, 1008],
   Tabloid: [792, 1224],
 } as const;
 
@@ -68,6 +155,11 @@ export interface TableOptions {
    * @example [0.4, 0.3, 0.3]  // 40% | 30% | 30%
    */
   widths?: number[];
+  /**
+   * Per-column text alignment. Defaults to "Left" for all columns.
+   * @example ["Left", "Center", "Right"]
+   */
+  columnAligns?: Align[];
   /** Alternate row backgrounds */
   striped?: boolean;
   /** Draw grid borders (default: true) */
@@ -89,42 +181,50 @@ export type PdfAMode = "1a" | "1b" | "2a" | "2b" | "2u" | "3a" | "3b" | "3u";
 
 /** Padding on all four sides */
 export interface PaddingSpec {
-  top:    number;
-  right:  number;
+  top: number;
+  right: number;
   bottom: number;
-  left:   number;
+  left: number;
 }
 
 /** Options for pdf.section() */
 export interface SectionOptions {
-  background?:  ColorInput;
+  background?: ColorInput;
   borderColor?: ColorInput;
-  padding?:     number | PaddingSpec;
-  radius?:      number;
+  padding?: number | PaddingSpec;
+  radius?: number;
 }
 
 export interface PDFOptions {
-  title?:       string;
-  author?:      string;
-  subject?:     string;
-  keywords?:    string[];
-  pageSize?:    PageSizeName;
+  title?: string;
+  author?: string;
+  subject?: string;
+  keywords?: string[];
+  pageSize?: PageSizeName;
   orientation?: "Portrait" | "Landscape";
-  margin?:      number | MarginSpec;
+  margin?: number | MarginSpec;
   /** PDF/A conformance level — embeds ICC profile and enforces spec */
-  pdfa?:        PdfAMode;
+  pdfa?: PdfAMode;
+  /** Default spacing added after each layout element (default: 8) */
+  gap?: number;
 }
 
 /** Context passed to pdf.header() and pdf.footer() callbacks */
 export interface HFContext {
   /** Current page number (1-indexed) */
-  pageNum:    number;
+  pageNum: number;
   /** Total number of pages in the document */
   totalPages: number;
   /** Full page width in points */
-  width:      number;
+  width: number;
   /** Band height in points (as passed to header/footer) */
-  height:     number;
+  height: number;
   /** Add elements to the header/footer band (same API as pdf.add()) */
   add(...items: (Buildable | RawElement | Array<Buildable | RawElement>)[]): void;
+}
+
+/** Pixel dimensions of an image */
+export interface ImageDimensions {
+  width: number;
+  height: number;
 }

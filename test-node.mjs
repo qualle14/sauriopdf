@@ -25,7 +25,7 @@ pdf
   .table({
     headers: ["Runtime", "Estado", "WASM"],
     rows: [
-      ["Deno",    "✓ OK", "fetch(URL)"],
+      ["Deno", "✓ OK", "fetch(URL)"],
       ["Node.js", "✓ OK", "readFileSync"],
       ["Browser", "✓ OK", "fetch(URL)"],
     ],

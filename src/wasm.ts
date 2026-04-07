@@ -11,7 +11,12 @@
 
 import wasmInit from "../wasm/sauriopdf_core.js";
 
-export { generatePdf, registerFont, testWasm, version } from "../wasm/sauriopdf_core.js";
+export {
+  generatePdf,
+  registerFont,
+  testWasm,
+  version,
+} from "../wasm/sauriopdf_core.js";
 
 let _ready = false;
 
@@ -24,8 +29,7 @@ export async function init(): Promise<void> {
   if (_ready) return;
 
   const g = globalThis as Record<string, unknown>;
-  const isNode =
-    g["Deno"] === undefined &&
+  const isNode = g["Deno"] === undefined &&
     typeof g["process"] === "object" &&
     g["process"] !== null &&
     typeof (g["process"] as Record<string, unknown>)["versions"] === "object";

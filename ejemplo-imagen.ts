@@ -11,7 +11,11 @@ await init();
 console.log("Descargando imagen...");
 const resp = await fetch("https://www.gstatic.com/webp/gallery/1.jpg");
 const imgBytes = new Uint8Array(await resp.arrayBuffer());
-console.log(`Imagen cargada: ${imgBytes.length} bytes (${(imgBytes.length / 1024).toFixed(1)} KB)`);
+console.log(
+  `Imagen cargada: ${imgBytes.length} bytes (${
+    (imgBytes.length / 1024).toFixed(1)
+  } KB)`,
+);
 
 const pdf = new PDF({ title: "Prueba de imagen" });
 

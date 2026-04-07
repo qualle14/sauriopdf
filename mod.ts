@@ -45,21 +45,21 @@
 
 // ─── WASM ────────────────────────────────────────────────────────────────────
 
-export { init, generatePdf, registerFont, testWasm, version } from "./src/wasm.ts";
+export { generatePdf, init, registerFont, testWasm, version } from "./src/wasm.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type {
-  ColorInput,
   Align,
   Buildable,
-  TableOptions,
-  PDFOptions,
-  PageSizeName,
+  ColorInput,
   HFContext,
-  SectionOptions,
-  PdfAMode,
   PaddingSpec,
+  PageSizeName,
+  PdfAMode,
+  PDFOptions,
+  SectionOptions,
+  TableOptions,
 } from "./src/types.ts";
 
 export { PAGE_SIZES } from "./src/types.ts";
@@ -67,24 +67,27 @@ export { PAGE_SIZES } from "./src/types.ts";
 // ─── Element builders ────────────────────────────────────────────────────────
 
 export {
-  // Classes — for advanced use or subclassing
-  TextElement,
-  RectElement,
+  circle,
   CircleElement,
-  LineElement,
-  PathElement,
+  image,
   ImageElement,
+  imageSize,
+  line,
+  LineElement,
+  link,
   LinkElement,
+  path,
+  PathElement,
+  rect,
+  RectElement,
   // Factory functions — the everyday API
   text,
+  // Classes — for advanced use or subclassing
+  TextElement,
   txt,
-  rect,
-  circle,
-  line,
-  path,
-  image,
-  link,
 } from "./src/elements.ts";
+
+export type { ImageDimensions } from "./src/types.ts";
 
 // ─── Document ────────────────────────────────────────────────────────────────
 
@@ -92,9 +95,18 @@ export { PDF, quickPDF } from "./src/pdf.ts";
 
 // ─── Font utilities ──────────────────────────────────────────────────────────
 
-export { loadLiberationSans, loadFonts, loadFont } from "./lib/font-loader.ts";
+export {
+  loadBuiltinFonts,
+  loadFont,
+  loadFonts,
+  loadLiberationMono,
+  loadLiberationSans,
+} from "./lib/font-loader.ts";
 export type { FontConfig } from "./lib/font-loader.ts";
+
+export { Font } from "./src/fonts.ts";
+export type { BuiltinFont } from "./src/fonts.ts";
 
 // ─── Version ─────────────────────────────────────────────────────────────────
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";

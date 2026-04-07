@@ -15,8 +15,8 @@
  */
 
 import { parseColor } from "./colors.ts";
-import { wrapLines, estimateLineWidth } from "./layout.ts";
-import type { TableOptions, RawElement, RGBA } from "./types.ts";
+import { alignmentOffset, estimateLineWidth, wrapLines } from "./layout.ts";
+import type { Align, RawElement, RGBA, TableOptions } from "./types.ts";
 
 /** Approximate ratio of cap-height to em-size for Liberation Sans */
 const CAP_RATIO = 0.72;
@@ -29,11 +29,11 @@ export function buildTableElements(
 ): { elements: RawElement[]; height: number } {
   const elements: RawElement[] = [];
 
-  const fontSize  = opts.fontSize    ?? 11;
-  const cellPad   = opts.cellPadding ?? 6;
-  const minRowH   = opts.rowHeight   ?? 0;
+  const fontSize = opts.fontSize ?? 11;
+  const cellPad = opts.cellPadding ?? 6;
+  const minRowH = opts.rowHeight ?? 0;
   const hasBorder = opts.borders !== false;
-  const lineH     = fontSize * 1.4;
+  const lineH = fontSize * 1.4;
 
   // Resolve column widths
   const colCount = Math.max(
@@ -69,12 +69,14 @@ export function buildTableElements(
 
   // ── Pre-compute row heights ─────────────────────────────────────────────────
 
-  const headerH    = (opts.headers?.length ?? 0) > 0 ? computeRowH(opts.headers!, true) : 0;
+  const headerH = (opts.headers?.length ?? 0) > 0
+    ? computeRowH(opts.headers!, true)
+    : 0;
   const rowHeights = opts.rows.map((r) => computeRowH(r, false));
 
   // ── Colors ─────────────────────────────────────────────────────────────────
 
-  const fg    = parseColor(opts.textColor ?? "#111111");
+  const fg = parseColor(opts.textColor ?? "#111111");
   const strBg = parseColor(opts.stripedBg ?? "#f4f6f8");
   const rowBg = opts.rowBg ? parseColor(opts.rowBg) : null;
 
@@ -84,17 +86,30 @@ export function buildTableElements(
   // ── Header ─────────────────────────────────────────────────────────────────
 
   if (opts.headers && opts.headers.length > 0) {
-    const hBg = parseColor(opts.headerBg    ?? "#2c3e50");
+    const hBg = parseColor(opts.headerBg ?? "#2c3e50");
     const hFg = parseColor(opts.headerColor ?? "#ffffff");
 
     elements.push(rectEl(x, curY, contentWidth, headerH, hBg, null, 0));
 
     let cx = x;
     for (let i = 0; i < opts.headers.length; i++) {
-      const cellW     = (widths[i] ?? contentWidth) - cellPad * 2;
-      const textX     = cx + cellPad;
-      const textY     = curY + cellPad + fontSize * CAP_RATIO; // baseline of line 0
-      elements.push(...cellTextEls(opts.headers[i] ?? "", textX, textY, fontSize, hFg, true, cellW, lineH));
+      const cellW = (widths[i] ?? contentWidth) - cellPad * 2;
+      const textX = cx + cellPad;
+      const textY = curY + cellPad + fontSize * CAP_RATIO; // baseline of line 0
+      const align: Align = opts.columnAligns?.[i] ?? "Left";
+      elements.push(
+        ...cellTextEls(
+          opts.headers[i] ?? "",
+          textX,
+          textY,
+          fontSize,
+          hFg,
+          true,
+          cellW,
+          lineH,
+          align,
+        ),
+      );
       cx += widths[i] ?? 0;
     }
 
@@ -105,12 +120,14 @@ export function buildTableElements(
   // ── Rows ───────────────────────────────────────────────────────────────────
 
   for (let ri = 0; ri < opts.rows.length; ri++) {
-    const row       = opts.rows[ri];
-    const thisRowH  = rowHeights[ri];
+    const row = opts.rows[ri];
+    const thisRowH = rowHeights[ri];
     const useStripe = opts.striped && ri % 2 === 1;
 
     if (useStripe || rowBg) {
-      elements.push(rectEl(x, curY, contentWidth, thisRowH, useStripe ? strBg : rowBg!, null, 0));
+      elements.push(
+        rectEl(x, curY, contentWidth, thisRowH, useStripe ? strBg : rowBg!, null, 0),
+      );
     }
 
     let cx = x;
@@ -118,7 +135,20 @@ export function buildTableElements(
       const cellW = (widths[ci] ?? contentWidth) - cellPad * 2;
       const textX = cx + cellPad;
       const textY = curY + cellPad + fontSize * CAP_RATIO; // baseline of line 0
-      elements.push(...cellTextEls(row[ci] ?? "", textX, textY, fontSize, fg, false, cellW, lineH));
+      const align: Align = opts.columnAligns?.[ci] ?? "Left";
+      elements.push(
+        ...cellTextEls(
+          row[ci] ?? "",
+          textX,
+          textY,
+          fontSize,
+          fg,
+          false,
+          cellW,
+          lineH,
+          align,
+        ),
+      );
       cx += widths[ci] ?? contentWidth;
     }
 
@@ -176,7 +206,11 @@ function autoColWidths(
         ? Math.max(...words.map((w) => estimateLineWidth(w, fontSize, false)))
         : 0;
       const lineW = estimateLineWidth(cell, fontSize, false);
-      scores[ci] = Math.max(scores[ci], longestWord, Math.min(lineW, contentWidth * 0.5));
+      scores[ci] = Math.max(
+        scores[ci],
+        longestWord,
+        Math.min(lineW, contentWidth * 0.5),
+      );
     }
   }
 
@@ -201,34 +235,43 @@ function cellTextEls(
   bold: boolean,
   cellW: number,
   lineH: number,
+  align: Align = "Left",
 ): RawElement[] {
   const lines = wrapLines(content, cellW, fontSize, bold);
-  return lines.map((line, i) => ({
-    Text: {
-      content:     line,
-      position:    { x, y: y + i * lineH },
-      font_family: "Liberation Sans",
-      font_size:   fontSize,
-      color,
-      bold,
-      italic:      false,
-      align:       "Left",
-      max_width:   null,
-    },
-  }));
+  return lines.map((line, i) => {
+    const xOff = alignmentOffset(estimateLineWidth(line, fontSize, bold), cellW, align);
+    return {
+      Text: {
+        content: line,
+        position: { x: x + xOff, y: y + i * lineH },
+        font_family: "Liberation Sans",
+        font_size: fontSize,
+        color,
+        bold,
+        italic: false,
+        align: "Left",
+        max_width: null,
+      },
+    };
+  });
 }
 
 function rectEl(
-  x: number, y: number, w: number, h: number,
-  fill: RGBA | null, stroke: RGBA | null, strokeWidth: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fill: RGBA | null,
+  stroke: RGBA | null,
+  strokeWidth: number,
 ): RawElement {
   return {
     Shape: {
       Rectangle: {
-        rect:          { x, y, width: w, height: h },
-        fill_color:    fill,
-        stroke_color:  stroke,
-        stroke_width:  strokeWidth,
+        rect: { x, y, width: w, height: h },
+        fill_color: fill,
+        stroke_color: stroke,
+        stroke_width: strokeWidth,
         border_radius: 0,
       },
     },
@@ -236,14 +279,18 @@ function rectEl(
 }
 
 function lineEl(
-  x1: number, y1: number, x2: number, y2: number,
-  color: RGBA, width: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: RGBA,
+  width: number,
 ): RawElement {
   return {
     Shape: {
       Line: {
         start: { x: x1, y: y1 },
-        end:   { x: x2, y: y2 },
+        end: { x: x2, y: y2 },
         color,
         width,
       },

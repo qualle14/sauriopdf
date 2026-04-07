@@ -3,7 +3,7 @@ name: Publish to npm
 on:
   push:
     tags:
-      - "v*"   # same trigger as JSR publish
+      - "v*" # same trigger as JSR publish
 
 jobs:
   publish:
@@ -11,6 +11,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run tests
+        run: deno test --allow-read --allow-write main_test.ts
 
       - uses: actions/setup-node@v4
         with:
@@ -20,7 +27,7 @@ jobs:
       - name: Install dev dependencies
         run: npm install --ignore-scripts
 
-      - name: Build TypeScript + copy WASM
+      - name: Build TypeScript + copy WASM + copy fonts
         run: npm run build:ts
 
       - name: Publish to npm

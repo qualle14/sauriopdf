@@ -1,12 +1,13 @@
 # SaurioPDF
 
-High-performance PDF generation for **Deno, Node.js, Bun, and browsers** — powered by a Rust/WebAssembly core ([Krilla](https://github.com/LaurenzV/krilla)).
+High-performance PDF generation for **Deno, Node.js, Bun, and browsers** — powered by a
+Rust/WebAssembly core ([Krilla](https://github.com/LaurenzV/krilla)).
 
-- Rust-quality rendering, TypeScript-friendly API
-- Auto-layout with wrapping, page breaks, tables, sections, headers, footers
-- Liberation Sans embedded — zero font setup required
-- Font subsetting automatic — only used glyphs embedded in the PDF
-- PDF/A archival mode (1b, 2b, 2u, 3b, 3u)
+- Auto-layout with wrapping, page breaks, tables, lists, code blocks, columns, callouts
+- Liberation Sans + Mono embedded — zero font setup in the default build
+- Font subsetting automatic — only glyphs actually used are embedded in the PDF
+- PDF/A archival mode (1a–3u)
+- Two builds: **full** (5.4 MB, fonts embedded) and **slim** (2.7 MB, load fonts at runtime)
 - No Rust required — pre-built WASM included
 
 ---
@@ -18,14 +19,12 @@ High-performance PDF generation for **Deno, Node.js, Bun, and browsers** — pow
 import { init, PDF } from "jsr:@sauriopdf/core";
 ```
 
-**Node.js / Bun** (requires Node.js ≥ 18)
+**Node.js / Bun** (≥ Node 18)
 ```bash
 npm install sauriopdf
 ```
 ```ts
 import { init, PDF } from "sauriopdf";
-
-await init(); // loads the pre-built WASM — reads the .wasm file directly, no fetch needed
 ```
 
 ---
@@ -35,37 +34,108 @@ await init(); // loads the pre-built WASM — reads the .wasm file directly, no 
 ```ts
 import { init, PDF } from "jsr:@sauriopdf/core";
 
-await init(); // loads the pre-built WASM — no Rust needed
+await init();
 
-const pdf = new PDF({ title: "Invoice", author: "Acme Corp" });
+const pdf = new PDF({ title: "Invoice #1042", margin: 60 });
+
+pdf.header(40, (ctx) => {
+  ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
+  ctx.add(text("ACME CORP").at(24, 14).size(15).bold().color("white"));
+});
+
+pdf.footer(24, (ctx) => {
+  ctx.add(
+    text(`Page ${ctx.pageNum} of ${ctx.totalPages}`)
+      .at(0, 8).size(9).color("gray").center().maxWidth(ctx.width),
+  );
+});
 
 pdf
   .h1("Invoice #1042")
-  .spacer(8)
   .p("Due: March 31, 2026", { color: "slategray" })
-  .spacer(16)
+  .spacer(12)
   .table({
-    headers: ["Item", "Qty", "Total"],
+    headers: ["Item", "Qty", "Unit", "Total"],
     rows: [
-      ["Widget Pro", "3", "$59.97"],
-      ["Gadget Plus", "1", "$49.00"],
+      ["Widget Pro",      "3", "$19.99", "$59.97"],
+      ["Consulting (hr)", "2", "$150.00", "$300.00"],
     ],
     striped: true,
+    columnAligns: ["Left", "Center", "Right", "Right"],
   })
-  .spacer(16)
-  .p("Thank you for your business.", { align: "Right", color: "steelblue" });
+  .spacer(8)
+  .p("Total: $359.97", { bold: true, align: "Right", size: 13 });
 
 await pdf.save("invoice.pdf");
 ```
 
 ---
 
-## API
+## Architecture
+
+```
+TypeScript (layout engine)         Rust / WASM (renderer)
+──────────────────────────         ──────────────────────
+PDFBase                            Krilla 0.6
+  └─ PDFLayout                       draw_text()
+       └─ PDF                         draw_path()
+                                      draw_image()
+mod.ts          ─── JSON ──►          generate_pdf()
+mod.slim.ts     ◄── bytes ───
+```
+
+All layout (cursor, text wrapping, alignment, tables, page breaks) happens in TypeScript.
+Rust/Krilla only receives pre-positioned elements and handles font rendering, image embedding,
+PDF serialization, and automatic font subsetting.
+
+**Source layout**
+
+```
+src/
+  pdf-base.ts    PDFBase — state, config, add/newPage/generate/save
+  pdf-layout.ts  PDFLayout — h1–h4, p, list, code, table, img, callout…
+  pdf.ts         PDF — section(), columns(), quickPDF()
+  elements.ts    Element builders + imageSize()
+  table.ts       buildTableElements() — decomposed into rects + lines + text
+  layout.ts      wrapLines(), alignmentOffset(), estimateTextHeight()
+  types.ts       All public + internal types; RawElement discriminated union
+  colors.ts      parseColor() + 100+ CSS named colors
+  fonts.ts       Font name constants
+  wasm.ts        Full build WASM bootstrap
+  wasm-slim.ts   Slim build WASM bootstrap
+lib/
+  font-loader.ts       Font loading — full build
+  font-loader-slim.ts  Font loading — slim build
+wasm/          Pre-built WASM with fonts embedded (5.4 MB)
+wasm-slim/     Pre-built WASM without fonts (2.7 MB) — build with: deno task build:wasm:slim
+fonts/         Liberation Sans + Mono TTF files
+rust-core/     Rust source
+```
+
+---
+
+## Builds
+
+| Import | WASM | Fonts | When to use |
+|---|---|---|---|
+| `@sauriopdf/core` | 5.4 MB | Embedded | Default — zero setup |
+| `@sauriopdf/core/slim` | 2.7 MB | Load at runtime | Browser bundle size matters |
+
+```ts
+// Slim build — load fonts once before generating
+import { init, PDF, loadBuiltinFonts } from "@sauriopdf/core/slim";
+await init();
+await loadBuiltinFonts(); // resolves bundled font path automatically
+```
+
+---
+
+## API reference
 
 ### `new PDF(opts?)`
 
 | Option | Type | Default |
-|--------|------|---------|
+|---|---|---|
 | `title` | `string` | `"Document"` |
 | `author` | `string` | `"SaurioPDF"` |
 | `subject` | `string` | `""` |
@@ -73,170 +143,212 @@ await pdf.save("invoice.pdf");
 | `pageSize` | `"A4" \| "A3" \| "A5" \| "Letter" \| "Legal" \| "Tabloid"` | `"A4"` |
 | `orientation` | `"Portrait" \| "Landscape"` | `"Portrait"` |
 | `margin` | `number \| { top, right, bottom, left }` | `72` (1 inch) |
-| `pdfa` | `"1b" \| "2b" \| "2u" \| "3b" \| "3u"` | — |
+| `gap` | `number` | `8` |
+| `pdfa` | `"1a" \| "1b" \| "2a" \| "2b" \| "2u" \| "3a" \| "3b" \| "3u"` | — |
 
-### Layout methods (auto-cursor)
+All options are also available as fluent methods:
+```ts
+pdf.title("My Doc").author("Alice").margins(50).gap(12).landscape().conformsTo("2b");
+```
+
+### Output
 
 ```ts
-pdf.h1(text, opts?)          // 28pt bold
-pdf.h2(text, opts?)          // 22pt bold
-pdf.h3(text, opts?)          // 17pt bold
-pdf.h4(text, opts?)          // 14pt bold
+await pdf.save("output.pdf");          // write file (Deno / Node / Bun)
+const bytes = await pdf.generate();    // Uint8Array (all runtimes + browser)
+```
 
-pdf.p(text, opts?)           // paragraph — wraps, aligns, paginates
+### State getters
+
+```ts
+pdf.cursor        // current Y position in points
+pdf.contentWidth  // usable width between margins
+pdf.pageWidth     // full page width
+pdf.pageHeight    // full page height
+```
+
+Useful when mixing layout and manual mode.
+
+### Layout methods
+
+All return `this` for chaining. Cursor advances automatically. Page breaks trigger when content would overflow.
+
+```ts
+pdf.h1(text, opts?)   // 28pt bold
+pdf.h2(text, opts?)   // 22pt bold
+pdf.h3(text, opts?)   // 17pt bold
+pdf.h4(text, opts?)   // 14pt bold
+
+pdf.p(text, opts?)
 // opts: { size?, color?, align?, bold?, italic?, lineHeight?, font? }
 
-pdf.spacer(points = 16)      // vertical gap
-pdf.hr(opts?)                // horizontal rule — opts: { color?, width? }
-pdf.table(TableOptions)      // see below
-pdf.img(data, opts?)         // Uint8Array — opts: { width?, height? }
-pdf.section(opts, fn)        // boxed section — see below
-pdf.newPage()                // force page break
+pdf.list(items, opts?)
+// opts: { style?: "bullet"|"numbered", indent?, bullet?, size?, color?, lineHeight?, font? }
+
+pdf.code(source, opts?)
+// Monospaced block with background. Defaults to Liberation Mono.
+// opts: { font?, size?, color?, background?, padding? }
+
+pdf.callout(message, opts?)
+// opts: { type?: "info"|"warning"|"error"|"success", title?, size?, padding? }
+
+pdf.spacer(points = 16)
+pdf.hr(opts?)          // opts: { color?, width? }
+pdf.newPage()
+pdf.pageBreak()        // alias for newPage()
+pdf.gap(n)             // change default spacing between elements
 ```
 
 ### Table
 
 ```ts
 pdf.table({
-  headers: ["Name", "Price"],          // optional header row
-  rows: [["Widget", "$9.99"]],
-  widths: [0.6, 0.4],                  // fractions of content width; omit for auto
-  striped: true,                       // alternate row backgrounds
-  borders: true,                       // grid lines (default: true)
-  fontSize: 11,
-  cellPadding: 6,
-  headerBg: "#1a1a2e",
-  headerColor: "#ffffff",
-  stripedBg: "#f4f6f8",
-  textColor: "#111111",
+  headers?: string[],
+  rows: string[][],
+  widths?: number[],          // ≤1 = fraction of content width, >1 = points, omit = auto
+  columnAligns?: Align[],     // "Left" | "Center" | "Right" | "Justify" per column
+  striped?: boolean,
+  borders?: boolean,          // default: true
+  fontSize?: number,
+  cellPadding?: number,
+  headerBg?: ColorInput,
+  headerColor?: ColorInput,
+  stripedBg?: ColorInput,
+  rowBg?: ColorInput,
+  textColor?: ColorInput,
 });
 ```
 
-Row heights are computed dynamically from wrapped cell content — no fixed height needed.
+Row heights are dynamic — computed from wrapped cell content. Tables auto-paginate.
+
+### Columns
+
+```ts
+pdf.columns(2, ([left, right]) => {
+  left.h3("Left column").p("Some text.");
+  right.h3("Right column").p("Other text.");
+}, {
+  widths?: number[],   // fractions or points; default: equal
+  gap?: number,        // default: 16
+  divider?: boolean | ColorInput,
+});
+```
 
 ### Section
 
 ```ts
 pdf.section(
-  { background: "#f0f4ff", borderColor: "#93c5fd", padding: 16 },
-  (s) => {
-    s.h3("Note").p("Sections support all layout methods.");
-  }
+  { background?: ColorInput, borderColor?: ColorInput, padding?: number | PaddingSpec, radius?: number },
+  (s) => { s.h3("Note").p("Content."); },
 );
 ```
-
-`padding` accepts a number (uniform) or `{ top, right, bottom, left }`.
 
 ### Header / Footer
 
 ```ts
-pdf.header(36, (ctx) => {
-  ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
-  ctx.add(text("My Report").at(24, 24).size(13).bold().color("white"));
-});
+pdf.header(height, (ctx) => { ... });
+pdf.footer(height, (ctx) => { ... });
 
-pdf.footer(24, (ctx) => {
-  ctx.add(
-    text(`Page ${ctx.pageNum} of ${ctx.totalPages}`)
-      .at(0, 8).size(9).color("gray").align("Center").maxWidth(ctx.width)
-  );
-});
-```
-
-`ctx.pageNum` and `ctx.totalPages` are always correct — headers/footers are injected after all pages are committed.
-
-### PDF/A
-
-```ts
-const pdf = new PDF({ pdfa: "2b" });
-// or fluent:
-pdf.conformsTo("2b");
+// ctx: { pageNum, totalPages, width, height, add(...) }
+// (0, 0) = top-left of the band
 ```
 
 ### Manual mode
 
-Add elements at explicit coordinates with `pdf.add()`:
-
 ```ts
-import { text, rect, circle, line, path, image, link } from "jsr:@sauriopdf/core";
+import { text, rect, circle, line, path, image, link, Font } from "jsr:@sauriopdf/core";
 
 pdf.add(
   rect(0, 0, 595, 80).fill("#1a1a2e"),
   text("Hello").at(50, 50).size(24).bold().color("white"),
   circle(297, 300, 60).fill("steelblue").stroke("navy", 2),
-  line(50, 400, 545, 400).color("#cccccc").width(0.75),
-  link("https://example.com", 50, 450, 200, 20),
+  line(50, 400, 545, 400).color("#ccc").width(0.75),
+  link("https://example.com", 50, 450, 160, 18),
 );
 ```
 
-Both modes can be mixed freely on the same page.
+Mixes freely with layout mode.
 
-### Element builder API
+### Element builders
 
 **`text(content, x?, y?, size?)`**
-`.at(x,y)` `.size(n)` `.bold()` `.italic()` `.color(c)` `.align("Left"|"Center"|"Right")` `.maxWidth(n)` `.opacity(a)` `.font(name)`
+`.at(x,y)` `.size(n)` `.bold()` `.italic()` `.underline()` `.strikethrough()`
+`.color(c)` `.align("Left"|"Center"|"Right"|"Justify")` `.center()` `.right()` `.justify()`
+`.maxWidth(n)` `.opacity(a)` `.font(name)`
 
-**`rect(x, y, w, h, opts?)`**
-`.fill(color)` `.stroke(color, width?)` `.round(radius?)`
+**`rect(x, y, w, h)`** `.fill(c)` `.stroke(c, w?)` `.round(r?)` `.radius(r)`
 
-**`circle(x, y, r, opts?)`**
-`.fill(color)` `.stroke(color, width?)`
+**`circle(x, y, r)`** `.fill(c)` `.stroke(c, w?)`
 
-**`line(x1, y1, x2, y2, opts?)`**
-`.color(c)` `.width(n)`
+**`line(x1, y1, x2, y2)`** `.color(c)` `.width(n)`
 
-**`path(points, opts?)`**
-`.fill(c)` `.stroke(c, w?)` `.closed(bool)` `.open()`
+**`path(points)`** `.fill(c)` `.stroke(c, w?)` `.closed()` `.open()`
 
-**`image(data, opts?)`** — Uint8Array (PNG/JPEG/WebP auto-detected)
-`.at(x,y)` `.size(w,h)` `.width(n)` `.height(n)`
+**`image(data)`** — PNG/JPEG/WebP auto-detected — `.at(x,y)` `.size(w,h)` `.fit(maxWidth)`
 
 **`link(url, x, y, w, h)`** — clickable annotation overlay
 
-### Colors
+**`imageSize(data)`** — returns `{ width, height } | null` from PNG/JPEG/WebP header bytes
 
-Accepts any of: `"steelblue"`, `"#1a1a2e"`, `"#fff"`, `"#rrggbbaa"`, `[r, g, b]`, `[r, g, b, a]`
-
-100+ CSS named colors supported.
-
-### Output
+### Font constants
 
 ```ts
-await pdf.save("output.pdf");          // Deno — writes file
-const bytes = await pdf.generate();   // any runtime — returns Uint8Array
+import { Font } from "jsr:@sauriopdf/core";
+
+text("Hello").font(Font.Sans)
+text("Bold").font(Font.SansBold)
+text("Code").font(Font.Mono)
+
+// Available: Font.Sans, Font.SansBold, Font.SansItalic, Font.SansBoldItalic
+//            Font.Mono, Font.MonoBold, Font.MonoItalic, Font.MonoBoldItalic
+```
+
+### Colors
+
+```ts
+type ColorInput =
+  | string   // CSS name: "steelblue", "coral" — 100+ supported
+  | string   // hex: "#rgb", "#rrggbb", "#rrggbbaa"
+  | [r: number, g: number, b: number]
+  | [r: number, g: number, b: number, a: number]  // a: 0.0–1.0
 ```
 
 ### Fonts
 
-Liberation Sans (Regular, Bold, Italic, Bold Italic) is embedded — always available, no setup.
-Font subsetting is automatic — Krilla only embeds the glyphs your document actually uses.
-
-To load fonts from a custom path or add other fonts:
-
 ```ts
-import { loadLiberationSans, loadFont } from "jsr:@sauriopdf/core";
+import { loadFont, loadFonts, loadLiberationSans, loadLiberationMono, loadBuiltinFonts } from "jsr:@sauriopdf/core";
 
-await loadLiberationSans("path/to/fonts/dir");    // Deno / Node / Bun / Browser
-await loadFont("MyFont", normalBytes, boldBytes); // custom font from Uint8Array
+// Load from a directory path or URL prefix
+await loadLiberationSans("path/to/fonts");
+await loadLiberationMono("https://cdn.example.com/fonts");
+
+// Load all built-in fonts at their bundled path (slim build)
+await loadBuiltinFonts();
+
+// Custom font
+await loadFont("MyFont", "./my-font.ttf");
+await loadFonts([
+  { name: "MyFont Regular", path: "./regular.ttf" },
+  { name: "MyFont Bold",    path: "./bold.ttf" },
+]);
 ```
 
 ---
 
 ## Contributing
 
-To modify the Rust/WASM core you need: Rust toolchain + `wasm-bindgen-cli`.
+Rust toolchain + `wasm-bindgen-cli` required to modify the WASM core.
 
 ```bash
 cargo install wasm-bindgen-cli
 
-# After editing rust-core/src/:
-deno task build:wasm
-
-# Tests
+deno task build:wasm        # full build → wasm/
+deno task build:wasm:slim   # slim build → wasm-slim/
 deno task test
+deno task check
 ```
 
-The pre-built WASM (`wasm/`) is committed — users always get it as-is from JSR/npm.
+The pre-built WASM files are committed — users get them as-is from JSR/npm.
 
 ---
 
