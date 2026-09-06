@@ -30,6 +30,7 @@ export function buildTableElements(
   const elements: RawElement[] = [];
 
   const fontSize = opts.fontSize ?? 11;
+  const font = opts.font ?? "Liberation Sans";
   const cellPad = opts.cellPadding ?? 6;
   const minRowH = opts.rowHeight ?? 0;
   const hasBorder = opts.borders !== false;
@@ -43,13 +44,13 @@ export function buildTableElements(
 
   const widths: number[] = opts.widths?.length
     ? opts.widths.map((w) => w <= 1 ? w * contentWidth : w)
-    : autoColWidths(opts.headers, opts.rows, colCount, contentWidth, fontSize, cellPad);
+    : autoColWidths(opts.headers, opts.rows, colCount, contentWidth, fontSize, cellPad, font);
 
   // ── Height helpers ──────────────────────────────────────────────────────────
 
   function cellLineCount(text: string, colIdx: number, bold: boolean): number {
     const cellW = (widths[colIdx] ?? contentWidth) - cellPad * 2;
-    return wrapLines(text, cellW, fontSize, bold).length;
+    return wrapLines(text, cellW, fontSize, bold, font).length;
   }
 
   /**
@@ -108,6 +109,7 @@ export function buildTableElements(
           cellW,
           lineH,
           align,
+          font,
         ),
       );
       cx += widths[i] ?? 0;
@@ -147,6 +149,7 @@ export function buildTableElements(
           cellW,
           lineH,
           align,
+          font,
         ),
       );
       cx += widths[ci] ?? contentWidth;
@@ -194,6 +197,7 @@ function autoColWidths(
   contentWidth: number,
   fontSize: number,
   cellPad: number,
+  font: string,
 ): number[] {
   const allRows = [...(headers ? [headers] : []), ...rows];
   const scores = Array<number>(colCount).fill(0);
@@ -203,9 +207,9 @@ function autoColWidths(
       const cell = row[ci] ?? "";
       const words = cell.split(/\s+/).filter((w) => w.length > 0);
       const longestWord = words.length > 0
-        ? Math.max(...words.map((w) => estimateLineWidth(w, fontSize, false)))
+        ? Math.max(...words.map((w) => estimateLineWidth(w, fontSize, false, font)))
         : 0;
-      const lineW = estimateLineWidth(cell, fontSize, false);
+      const lineW = estimateLineWidth(cell, fontSize, false, font);
       scores[ci] = Math.max(
         scores[ci],
         longestWord,
@@ -236,15 +240,16 @@ function cellTextEls(
   cellW: number,
   lineH: number,
   align: Align = "Left",
+  font = "Liberation Sans",
 ): RawElement[] {
-  const lines = wrapLines(content, cellW, fontSize, bold);
+  const lines = wrapLines(content, cellW, fontSize, bold, font);
   return lines.map((line, i) => {
-    const xOff = alignmentOffset(estimateLineWidth(line, fontSize, bold), cellW, align);
+    const xOff = alignmentOffset(estimateLineWidth(line, fontSize, bold, font), cellW, align);
     return {
       Text: {
         content: line,
         position: { x: x + xOff, y: y + i * lineH },
-        font_family: "Liberation Sans",
+        font_family: font,
         font_size: fontSize,
         color,
         bold,
@@ -293,6 +298,10 @@ function lineEl(
         end: { x: x2, y: y2 },
         color,
         width,
+        line_cap: "Butt",
+        line_join: "Miter",
+        dash_array: [],
+        dash_offset: 0,
       },
     },
   };

@@ -45,7 +45,7 @@
 
 // ─── WASM ────────────────────────────────────────────────────────────────────
 
-export { generatePdf, init, registerFont, testWasm, version } from "./src/wasm.ts";
+export { generatePdf, init, measureChars, registerFont, testWasm, version } from "./src/wasm.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,12 +54,16 @@ export type {
   Buildable,
   ColorInput,
   HFContext,
+  LineCap,
+  LineJoin,
   PaddingSpec,
   PageSizeName,
   PdfAMode,
   PDFOptions,
+  PDFTheme,
   SectionOptions,
   TableOptions,
+  TextStyle,
 } from "./src/types.ts";
 
 export { PAGE_SIZES } from "./src/types.ts";
@@ -109,4 +113,4 @@ export type { BuiltinFont } from "./src/fonts.ts";
 
 // ─── Version ─────────────────────────────────────────────────────────────────
 
-export const VERSION = "0.2.1";
+export const VERSION = "0.3.0";

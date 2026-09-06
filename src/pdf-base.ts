@@ -9,11 +9,13 @@ import { ensureWasmReady, generatePdf } from "./wasm.ts";
 import { TextElement } from "./elements.ts";
 import type {
   Buildable,
+  ColorInput,
   HFContext,
   MarginSpec,
   PageSizeName,
   PdfAMode,
   PDFOptions,
+  PDFTheme,
   RawElement,
 } from "./types.ts";
 import { PAGE_SIZES as PAGE_SIZE_MAP } from "./types.ts";
@@ -40,6 +42,9 @@ interface DocConfig {
   compress: boolean;
   pdf_version: string;
   pdfa: string | null;
+  // Used when page_size = "Custom"
+  custom_width: number | null;
+  custom_height: number | null;
 }
 
 type HFCallback = (ctx: HFContext) => void;
@@ -122,6 +127,10 @@ export class PDFBase {
   protected _dim = { width: 595, height: 842 };
   protected _cursorY: number;
   protected _gap = 8;
+  protected _theme: { heading: ColorInput | null; text: ColorInput | null } = {
+    heading: null,
+    text: null,
+  };
 
   protected _headerH = 0;
   private _headerFn: HFCallback | null = null;
@@ -143,6 +152,8 @@ export class PDFBase {
     compress: true,
     pdf_version: "1.7",
     pdfa: null,
+    custom_width: null,
+    custom_height: null,
   };
 
   constructor(opts?: PDFOptions) {
@@ -151,6 +162,12 @@ export class PDFBase {
     if (opts?.subject) this._cfg.metadata.subject = opts.subject;
     if (opts?.keywords) this._cfg.metadata.keywords = opts.keywords;
     if (opts?.pageSize) this._setPageSize(opts.pageSize);
+    if (opts?.customSize) {
+      this._cfg.page_size = "Custom";
+      this._cfg.custom_width = opts.customSize[0];
+      this._cfg.custom_height = opts.customSize[1];
+      this._dim = { width: opts.customSize[0], height: opts.customSize[1] };
+    }
     if (opts?.orientation) {
       this._cfg.orientation = opts.orientation;
       this._setPageSize(this._cfg.page_size as PageSizeName);
@@ -163,6 +180,7 @@ export class PDFBase {
     }
     if (opts?.pdfa) this._cfg.pdfa = opts.pdfa;
     if (opts?.gap !== undefined) this._gap = opts.gap;
+    if (opts?.theme) this.theme(opts.theme);
     this._cursorY = this._cfg.margin.top;
   }
 
@@ -245,6 +263,18 @@ export class PDFBase {
    */
   gap(n: number): this {
     this._gap = n;
+    return this;
+  }
+
+  /**
+   * Set default colors for layout methods (h1–h4, p, list, code) so you don't
+   * have to pass `{ color }` on every call. Merges with any theme already set;
+   * an explicit `color` option on a given call still overrides it.
+   * @example pdf.theme({ heading: "#1a1a2e", text: "#333" })
+   */
+  theme(t: PDFTheme): this {
+    if (t.heading !== undefined) this._theme.heading = t.heading;
+    if (t.text !== undefined) this._theme.text = t.text;
     return this;
   }
 
@@ -350,10 +380,14 @@ export class PDFBase {
 
   // ── Output ────────────────────────────────────────────────────────────────
 
-  /** Generate PDF bytes */
-  async generate(): Promise<Uint8Array> {
-    await ensureWasmReady();
-
+  /**
+   * Serialize the current document into the JSON protocol the Rust/WASM core
+   * expects. `generate()` calls this internally — you normally don't need it
+   * directly, unless you're handing the document off to something outside the
+   * default sync path (e.g. the optional worker-pool backend, `sauriopdf/pool`,
+   * which generates in a worker instead of in-process).
+   */
+  toDocumentJSON(): string {
     if (this._current.length > 0 || this._pages.length === 0) {
       this._commitPage();
     }
@@ -410,7 +444,13 @@ export class PDFBase {
       }
     }
 
-    return generatePdf(JSON.stringify({ config: this._cfg, pages: this._pages }));
+    return JSON.stringify({ config: this._cfg, pages: this._pages });
+  }
+
+  /** Generate PDF bytes */
+  async generate(): Promise<Uint8Array> {
+    await ensureWasmReady();
+    return generatePdf(this.toDocumentJSON());
   }
 
   /** Generate and write to a file (Deno / Node.js) */

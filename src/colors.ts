@@ -5,6 +5,8 @@
 
 import type { ColorInput, RGBA } from "./types.ts";
 
+// ─── CSS named colors ───────────────────────────────────────────────────────────
+
 export const CSS_COLORS: Record<string, string> = {
   // Basics
   black: "#000000",
@@ -124,6 +126,8 @@ export const CSS_COLORS: Record<string, string> = {
   rosybrown: "#bc8f8f",
   transparent: "#00000000",
 };
+
+// ─── Parser ─────────────────────────────────────────────────────────────────────
 
 export function parseColor(c: ColorInput): RGBA {
   if (typeof c === "string") {

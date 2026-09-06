@@ -63,6 +63,10 @@ export type RawShapeVariant =
       end: RawPoint;
       color: RGBA;
       width: number;
+      line_cap: LineCap;
+      line_join: LineJoin;
+      dash_array: number[];
+      dash_offset: number;
     };
   }
   | {
@@ -144,6 +148,16 @@ export const PAGE_SIZES: Record<string, [number, number]> = {
 
 export type PageSizeName = keyof typeof PAGE_SIZES;
 
+/**
+ * Style options shared by every text-emitting layout method (`p`, `h1`–`h4`,
+ * `list`, `code`). Omitted `color` falls back to the PDF's `theme`; omitted
+ * `font` falls back to the method's own default.
+ */
+export interface TextStyle {
+  color?: ColorInput;
+  font?: string;
+}
+
 export interface TableOptions {
   /** Column header labels */
   headers?: string[];
@@ -165,6 +179,8 @@ export interface TableOptions {
   /** Draw grid borders (default: true) */
   borders?: boolean;
   fontSize?: number;
+  /** Font family for all cell text. Must already be embedded or registered via loadFont(). */
+  font?: string;
   cellPadding?: number;
   /** Override auto-calculated row height */
   rowHeight?: number;
@@ -195,18 +211,47 @@ export interface SectionOptions {
   radius?: number;
 }
 
+/** Stroke line-cap style */
+export type LineCap = "Butt" | "Round" | "Square";
+
+/** Stroke line-join style */
+export type LineJoin = "Miter" | "Round" | "Bevel";
+
 export interface PDFOptions {
   title?: string;
   author?: string;
   subject?: string;
   keywords?: string[];
   pageSize?: PageSizeName;
+  /**
+   * Custom page dimensions in points when `pageSize` is not one of the presets.
+   * @example { customSize: [400, 600] }  // 400×600 pt custom page
+   */
+  customSize?: [number, number];
   orientation?: "Portrait" | "Landscape";
   margin?: number | MarginSpec;
   /** PDF/A conformance level — embeds ICC profile and enforces spec */
   pdfa?: PdfAMode;
   /** Default spacing added after each layout element (default: 8) */
   gap?: number;
+  /**
+   * Default colors for layout methods (h1–h4, p, list, code) — set once
+   * instead of passing `{ color }` to every call. An explicit `color` option
+   * on a given call still overrides the theme.
+   * @example
+   * ```ts
+   * new PDF({ theme: { heading: "#1a1a2e", text: "#333" } });
+   * ```
+   */
+  theme?: PDFTheme;
+}
+
+/** Default colors applied by layout methods when no explicit `color` is given. */
+export interface PDFTheme {
+  /** Default color for h1–h4 */
+  heading?: ColorInput;
+  /** Default color for p(), list(), and code() */
+  text?: ColorInput;
 }
 
 /** Context passed to pdf.header() and pdf.footer() callbacks */

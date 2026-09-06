@@ -1,7 +1,7 @@
 /**
  * PDFLayout — auto-layout methods built on top of PDFBase.
  *
- * Provides: h1–h4, p, spacer, hr, table, img
+ * Provides: h1–h4, p, spacer, hr, table, img, list, code, callout.
  * All methods advance an internal cursor and auto-break pages.
  */
 
@@ -15,29 +15,29 @@ import {
   TextElement,
 } from "./elements.ts";
 import { buildTableElements } from "./table.ts";
-import type { Align, ColorInput, TableOptions } from "./types.ts";
+import type { Align, ColorInput, TableOptions, TextStyle } from "./types.ts";
 
 export class PDFLayout extends PDFBase {
   // ── Headings ──────────────────────────────────────────────────────────────
 
   /** Heading level 1 — 28pt bold */
-  h1(content: string, opts?: { color?: ColorInput }): this {
-    return this._layoutText(content, 28, { bold: true, ...opts });
+  h1(content: string, opts?: TextStyle): this {
+    return this._layoutText(content, 28, { bold: true, ...opts }, "heading");
   }
 
   /** Heading level 2 — 22pt bold */
-  h2(content: string, opts?: { color?: ColorInput }): this {
-    return this._layoutText(content, 22, { bold: true, ...opts });
+  h2(content: string, opts?: TextStyle): this {
+    return this._layoutText(content, 22, { bold: true, ...opts }, "heading");
   }
 
   /** Heading level 3 — 17pt bold */
-  h3(content: string, opts?: { color?: ColorInput }): this {
-    return this._layoutText(content, 17, { bold: true, ...opts });
+  h3(content: string, opts?: TextStyle): this {
+    return this._layoutText(content, 17, { bold: true, ...opts }, "heading");
   }
 
   /** Heading level 4 — 14pt bold */
-  h4(content: string, opts?: { color?: ColorInput }): this {
-    return this._layoutText(content, 14, { bold: true, ...opts });
+  h4(content: string, opts?: TextStyle): this {
+    return this._layoutText(content, 14, { bold: true, ...opts }, "heading");
   }
 
   // ── Paragraph ────────────────────────────────────────────────────────────
@@ -48,14 +48,12 @@ export class PDFLayout extends PDFBase {
    */
   p(
     content: string,
-    opts?: {
+    opts?: TextStyle & {
       size?: number;
-      color?: ColorInput;
       align?: Align;
       lineHeight?: number;
       bold?: boolean;
       italic?: boolean;
-      font?: string;
     },
   ): this {
     return this._layoutText(content, opts?.size ?? 11, opts);
@@ -165,21 +163,20 @@ export class PDFLayout extends PDFBase {
    */
   list(
     items: string[],
-    opts?: {
+    opts?: TextStyle & {
       style?: "bullet" | "numbered";
       indent?: number;
       bullet?: string;
       size?: number;
-      color?: ColorInput;
       lineHeight?: number;
-      font?: string;
     },
   ): this {
     const style = opts?.style ?? "bullet";
     const indent = opts?.indent ?? 20;
     const size = opts?.size ?? 11;
     const lh = opts?.lineHeight ?? 1.4;
-    const bulletChar = opts?.bullet ?? "\u2022"; // •
+    const bulletChar = opts?.bullet ?? "•";
+    const color = this._themedColor(opts?.color, "text");
 
     const x = this._cfg.margin.left;
     const textW = this._contentWidth() - indent;
@@ -187,22 +184,20 @@ export class PDFLayout extends PDFBase {
     for (let i = 0; i < items.length; i++) {
       const prefix = style === "numbered" ? `${i + 1}.` : bulletChar;
       const content = items[i];
-      const h = estimateTextHeight(content, textW, size, lh, false);
+      const h = estimateTextHeight(content, textW, size, lh, false, opts?.font);
       const isLast = i === items.length - 1;
 
       this._reserve(h);
 
       // Prefix (bullet or number) at left margin
       const prefixEl = new TextElement(prefix, x, this._cursorY, size);
-      if (opts?.color) prefixEl.color(opts.color);
-      if (opts?.font) prefixEl.font(opts.font);
+      this._styleText(prefixEl, color, opts?.font);
       this._current.push(prefixEl.build());
 
       // Item text, indented and wrapped
       const textEl = new TextElement(content, x + indent, this._cursorY, size)
         .maxWidth(textW);
-      if (opts?.color) textEl.color(opts.color);
-      if (opts?.font) textEl.font(opts.font);
+      this._styleText(textEl, color, opts?.font);
       this._current.push(...textEl.buildAll(lh));
 
       // Small gap between items; standard gap after the last one
@@ -225,10 +220,8 @@ export class PDFLayout extends PDFBase {
    */
   code(
     content: string,
-    opts?: {
-      font?: string;
+    opts?: TextStyle & {
       size?: number;
-      color?: ColorInput;
       background?: ColorInput;
       padding?: number;
     },
@@ -238,6 +231,7 @@ export class PDFLayout extends PDFBase {
     const lh = 1.4;
     const pad = opts?.padding ?? 10;
     const bg = opts?.background ?? "#f6f8fa";
+    const color = this._themedColor(opts?.color, "text");
 
     const x = this._cfg.margin.left;
     const cw = this._contentWidth();
@@ -262,7 +256,7 @@ export class PDFLayout extends PDFBase {
         y + pad + baselineOffset + i * size * lh,
         size,
       ).font(font);
-      if (opts?.color) lineEl.color(opts.color);
+      if (color) lineEl.color(color);
       this._current.push(lineEl.build());
     }
 
@@ -335,22 +329,36 @@ export class PDFLayout extends PDFBase {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
+  /** Resolve an explicit color against the PDF's theme for the given role. */
+  private _themedColor(
+    explicit: ColorInput | undefined,
+    role: "heading" | "text",
+  ): ColorInput | undefined {
+    return explicit ?? this._theme[role] ?? undefined;
+  }
+
+  /** Apply the color/font pair every text-emitting method resolves the same way. */
+  private _styleText(el: TextElement, color: ColorInput | undefined, font: string | undefined): void {
+    if (color) el.color(color);
+    if (font) el.font(font);
+  }
+
   private _layoutText(
     content: string,
     size: number,
-    opts?: {
+    opts?: TextStyle & {
       bold?: boolean;
       italic?: boolean;
-      color?: ColorInput;
       align?: Align;
       lineHeight?: number;
-      font?: string;
     },
+    role: "heading" | "text" = "text",
   ): this {
     const cw = this._contentWidth();
     const lh = opts?.lineHeight ?? 1.4;
     const bold = opts?.bold ?? false;
-    const h = estimateTextHeight(content, cw, size, lh, bold);
+    const h = estimateTextHeight(content, cw, size, lh, bold, opts?.font);
+    const color = this._themedColor(opts?.color, role);
 
     this._reserve(h);
 
@@ -359,9 +367,8 @@ export class PDFLayout extends PDFBase {
 
     if (bold) el.bold();
     if (opts?.italic) el.italic();
-    if (opts?.color) el.color(opts.color);
     if (opts?.align) el.align(opts.align);
-    if (opts?.font) el.font(opts.font);
+    this._styleText(el, color, opts?.font);
 
     this._current.push(...el.buildAll(lh));
     this._cursorY += h + this._gap;

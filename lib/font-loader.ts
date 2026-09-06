@@ -4,7 +4,7 @@
  * them with the WASM module so Krilla can use them for rendering.
  */
 
-import { registerFont } from "../wasm/sauriopdf_core.js";
+import { registerFont } from "../src/wasm.ts";
 
 export interface FontConfig {
   name: string;
@@ -14,11 +14,10 @@ export interface FontConfig {
 /**
  * Load all built-in fonts (Liberation Sans + Mono, 4 variants each).
  * Resolves the bundled font path automatically — no configuration needed.
- * Intended for the slim build where fonts are not embedded in the WASM.
  *
  * @example
  * ```ts
- * import { init, PDF, loadBuiltinFonts } from "@sauriopdf/core/slim";
+ * import { init, PDF, loadBuiltinFonts } from "sauriopdf";
  * await init();
  * await loadBuiltinFonts();
  * ```
@@ -73,7 +72,7 @@ export async function loadFont(name: string, path: string): Promise<void> {
   registerFont(name, data);
 }
 
-// ── Runtime-agnostic file reader ───────────────────────────────────────────────
+// ─── Runtime-agnostic file reader ──────────────────────────────────────────────
 
 async function readBytes(path: string): Promise<Uint8Array> {
   const isFileUrl = path.startsWith("file:");

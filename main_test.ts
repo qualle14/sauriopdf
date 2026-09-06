@@ -14,7 +14,13 @@ import { parseColor } from "./src/colors.ts";
 import { buildTableElements } from "./src/table.ts";
 import { imageSize, link, rect, text } from "./src/elements.ts";
 import { PDF } from "./src/pdf.ts";
+import { init } from "./src/wasm.ts";
 import type { RawElement } from "./src/types.ts";
+
+// Layout math (wrapLines, estimateLineWidth, ...) reads real glyph widths from
+// WASM (measureChars), so it — like everything else in this file — needs the
+// module initialized first.
+await init();
 
 // Helper: peek at the current-page element buffer without generating bytes
 function peek(pdf: PDF): RawElement[] {
@@ -122,6 +128,57 @@ Deno.test("estimateLineWidth: bold is wider than normal", () => {
   const normal = estimateLineWidth("hello", 12, false);
   const bold = estimateLineWidth("hello", 12, true);
   assert(bold > normal);
+});
+
+Deno.test("estimateLineWidth: uses real glyph metrics, not a flat average", () => {
+  // In a proportional font, "i" (narrow) and "M" (wide) can't share a width —
+  // a flat average-per-char estimate would give them the exact same width.
+  const narrow = estimateLineWidth("i", 12);
+  const wide = estimateLineWidth("M", 12);
+  assert(wide > narrow * 1.5, `expected "M" much wider than "i", got ${wide} vs ${narrow}`);
+});
+
+Deno.test("estimateLineWidth: different font families measure differently", () => {
+  const sans = estimateLineWidth("Wow", 12, false, "Liberation Sans");
+  const mono = estimateLineWidth("Wow", 12, false, "Liberation Mono");
+  assert(sans !== mono, "proportional and monospace fonts should not measure the same");
+});
+
+Deno.test("estimateLineWidth: per-character cache stays correct across repeats and reorderings", () => {
+  // Same characters, different order — must total the same width either way,
+  // whether or not any of them were already cached from a previous call.
+  const ab = estimateLineWidth("ab", 12);
+  const ba = estimateLineWidth("ba", 12);
+  assertAlmostEquals(ab, ba, 0.001);
+
+  // Repeating a call that's now fully cache-hit must return the same value.
+  const abAgain = estimateLineWidth("ab", 12);
+  assertEquals(abAgain, ab);
+
+  // A call mixing already-cached ("a") and new ("z") characters must still
+  // measure the new one correctly, not reuse a stale/wrong width for it.
+  const az = estimateLineWidth("az", 12);
+  const zOnly = estimateLineWidth("z", 12);
+  const aOnly = estimateLineWidth("a", 12);
+  assertAlmostEquals(az, aOnly + zOnly, 0.001);
+});
+
+Deno.test("estimateLineWidth: cache stays correct after being forced to evict (LRU bound)", () => {
+  // Blow well past the 200-entry font-key cap with distinct sizes, simulating
+  // a server computing font sizes per document instead of using a fixed set.
+  // Every size's own measurement must still come out right afterwards —
+  // eviction should never corrupt or misattribute a width.
+  const sizes = Array.from({ length: 250 }, (_, i) => 10 + i * 0.1);
+  for (const size of sizes) estimateLineWidth("Q", size);
+
+  const first = estimateLineWidth("Q", sizes[0]); // long since evicted
+  const last = estimateLineWidth("Q", sizes[sizes.length - 1]); // still cached
+  assert(last > first, "a larger font size must measure wider, evicted or not");
+
+  // Re-measuring an evicted size must match a fresh, never-before-seen size of
+  // the same value — i.e. it's genuinely re-measured, not returning garbage.
+  const reMeasured = estimateLineWidth("Q", sizes[0]);
+  assertEquals(reMeasured, first);
 });
 
 // ─── Alignment offset ─────────────────────────────────────────────────────────
@@ -248,6 +305,24 @@ Deno.test("buildTableElements: custom widths applied", () => {
     400,
   );
   assert(elements.length > 0);
+});
+
+Deno.test("buildTableElements: defaults to Liberation Sans", () => {
+  const { elements } = buildTableElements({ rows: [["cell"]] }, 0, 0, 200);
+  const text = elements.find((e) => "Text" in e) as { Text: { font_family: string } };
+  assertEquals(text.Text.font_family, "Liberation Sans");
+});
+
+Deno.test("buildTableElements: font option is no longer hardcoded", () => {
+  const { elements } = buildTableElements(
+    { headers: ["H"], rows: [["cell"]], font: "Liberation Mono" },
+    0,
+    0,
+    200,
+  );
+  const texts = elements.filter((e) => "Text" in e) as { Text: { font_family: string } }[];
+  assert(texts.length >= 2, "expected header + row text elements");
+  for (const t of texts) assertEquals(t.Text.font_family, "Liberation Mono");
 });
 
 // ─── PDF.list() ───────────────────────────────────────────────────────────────
@@ -460,4 +535,38 @@ Deno.test("PDF.callout(): custom title appears in output", () => {
 Deno.test("PDF.callout(): returns this for chaining", () => {
   const pdf = new PDF();
   assert(pdf.callout("msg") === pdf);
+});
+
+// ─── Theme ──────────────────────────────────────────────────────────────────
+
+Deno.test("theme: h1/p use theme colors when no explicit color is given", () => {
+  const pdf = new PDF({ theme: { heading: "#1a1a2e", text: "#333333" } });
+  pdf.h1("Title").p("Body");
+  const els = peek(pdf);
+  const heading =
+    (els[0] as { Text: { color: { r: number; g: number; b: number; a: number } } }).Text.color;
+  const body =
+    (els[1] as { Text: { color: { r: number; g: number; b: number; a: number } } }).Text.color;
+  assertEquals(heading, { r: 0x1a, g: 0x1a, b: 0x2e, a: 1 });
+  assertEquals(body, { r: 0x33, g: 0x33, b: 0x33, a: 1 });
+});
+
+Deno.test("theme: explicit color option overrides the theme", () => {
+  const pdf = new PDF({ theme: { text: "#333333" } });
+  pdf.p("Body", { color: "red" });
+  const els = peek(pdf);
+  const color =
+    (els[0] as { Text: { color: { r: number; g: number; b: number; a: number } } }).Text.color;
+  assertEquals(color, { r: 255, g: 0, b: 0, a: 1 });
+});
+
+Deno.test("theme: fluent .theme() merges into an existing theme", () => {
+  const pdf = new PDF({ theme: { heading: "#1a1a2e" } });
+  pdf.theme({ text: "#333333" });
+  pdf.h1("Title").p("Body");
+  const els = peek(pdf);
+  const heading = (els[0] as { Text: { color: { r: number } } }).Text.color;
+  const body = (els[1] as { Text: { color: { r: number } } }).Text.color;
+  assertEquals(heading.r, 0x1a);
+  assertEquals(body.r, 0x33);
 });
