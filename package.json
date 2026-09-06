@@ -3,6 +3,10 @@
   "version": "0.3.0",
   "description": "High-performance PDF generation for Deno, Node.js, Bun, and browsers — powered by Rust/WASM (Krilla)",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qualle14/sauriopdf.git"
+  },
   "exports": {
     ".": {
       "import": "./dist/mod.js",
