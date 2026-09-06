@@ -1,6 +1,6 @@
 [package]
 name = "sauriopdf-core"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Qualle14"]
 description = "High-performance PDF generator using Krilla, compiled to WASM"
@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # PDF Generation with Krilla
-krilla = "0.6"
+krilla = "0.8"
 
 # WASM Bindings
 wasm-bindgen = "0.2"
@@ -24,6 +24,11 @@ serde-wasm-bindgen = "0.6"
 
 # Image support
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# Real glyph advance widths for text wrapping (hmtx/hhea tables) — already in the
+# dependency tree transitively via Krilla's font stack; pinned directly so our own
+# code can use it too.
+ttf-parser = "0.25"
 
 # Error handling
 thiserror = "2.0"
@@ -42,10 +47,7 @@ console_error_panic_hook = { version = "0.1", optional = true }
 # We'll handle KaTeX rendering on the TS side and pass rendered glyphs
 
 [features]
-default = ["console_error_panic_hook", "embedded-fonts"]
-# Omit this feature to build a ~2.5 MB WASM without embedded font data.
-# Users must call loadLiberationSans() / loadFont() before generating PDFs.
-embedded-fonts = []
+default = ["console_error_panic_hook"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

@@ -140,6 +140,14 @@ export function generatePdf(document_json: string): Uint8Array;
 export function initialize(): void;
 
 /**
+ * Real per-character advance widths for `text` in `font_family` at `font_size`,
+ * read from that font's own metrics tables — used by the TypeScript layout
+ * engine for text wrapping and alignment instead of an average-width guess.
+ * Sees the same embedded + custom-registered fonts as `generatePdf`.
+ */
+export function measureChars(font_family: string, bold: boolean, italic: boolean, text: string, font_size: number): Float32Array;
+
+/**
  * Register a custom font (receives font bytes)
  */
 export function registerFont(name: string, font_data: Uint8Array): void;
@@ -184,26 +192,27 @@ export interface InitOutput {
     readonly margin_new: (a: number, b: number, c: number, d: number) => number;
     readonly margin_symmetric: (a: number, b: number) => number;
     readonly margin_uniform: (a: number) => number;
+    readonly measureChars: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly point_new: (a: number, b: number) => number;
     readonly registerFont: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly testWasm: (a: number) => void;
     readonly version: (a: number) => void;
-    readonly rect_new: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbg_set_rect_x: (a: number, b: number) => void;
+    readonly __wbg_set_point_x: (a: number, b: number) => void;
+    readonly __wbg_set_margin_top: (a: number, b: number) => void;
+    readonly __wbg_get_rect_x: (a: number) => number;
+    readonly __wbg_set_rect_y: (a: number, b: number) => void;
+    readonly __wbg_get_rect_y: (a: number) => number;
+    readonly __wbg_get_point_x: (a: number) => number;
     readonly __wbg_set_point_y: (a: number, b: number) => void;
     readonly __wbg_set_rect_height: (a: number, b: number) => void;
     readonly __wbg_set_rect_width: (a: number, b: number) => void;
-    readonly __wbg_set_rect_y: (a: number, b: number) => void;
-    readonly __wbg_get_margin_top: (a: number) => number;
-    readonly __wbg_set_rect_x: (a: number, b: number) => void;
-    readonly __wbg_get_rect_x: (a: number) => number;
-    readonly __wbg_set_point_x: (a: number, b: number) => void;
-    readonly __wbg_get_point_x: (a: number) => number;
-    readonly __wbg_get_point_y: (a: number) => number;
-    readonly __wbg_get_rect_y: (a: number) => number;
-    readonly __wbg_get_rect_width: (a: number) => number;
-    readonly __wbg_get_rect_height: (a: number) => number;
-    readonly __wbg_set_margin_top: (a: number, b: number) => void;
     readonly __wbg_rect_free: (a: number, b: number) => void;
+    readonly __wbg_get_margin_top: (a: number) => number;
+    readonly __wbg_get_point_y: (a: number) => number;
+    readonly __wbg_get_rect_height: (a: number) => number;
+    readonly __wbg_get_rect_width: (a: number) => number;
+    readonly rect_new: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export2: (a: number, b: number) => number;
     readonly __wbindgen_export3: (a: number, b: number, c: number, d: number) => number;

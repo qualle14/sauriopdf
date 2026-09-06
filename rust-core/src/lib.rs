@@ -24,16 +24,15 @@ use std::collections::HashMap;
 pub mod document;
 pub mod content;
 pub mod fonts;
+pub mod metrics;
 pub mod types;
 pub mod error;
 pub mod utils;
 
-// Re-export main types
 pub use document::{PdfDocument, DocumentConfig};
 pub use error::{PdfError, Result};
 
-// Global font registry
-static FONT_REGISTRY: Mutex<Option<HashMap<String, fonts::FontFamily>>> = Mutex::new(None);
+// ─── Lifecycle ──────────────────────────────────────────────────────────────────
 
 /// Initialize the library (sets up panic hooks for better error messages in WASM)
 #[wasm_bindgen(start)]
@@ -50,6 +49,30 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+// ─── Font registry ──────────────────────────────────────────────────────────────
+
+/// Fonts registered via `registerFont`, keyed by family name. Global (not per-document)
+/// because registration happens before we know which document will use them.
+static FONT_REGISTRY: Mutex<Option<HashMap<String, fonts::FontFamily>>> = Mutex::new(None);
+
+/// Merge every custom font in the global registry into `font_manager`.
+/// Shared by `generate_pdf` (renders with these fonts) and `measure_chars`
+/// (measures text set in these fonts) so both see the same font set.
+fn merge_registered_fonts(font_manager: &mut fonts::FontManager) -> std::result::Result<(), JsValue> {
+    let registry = FONT_REGISTRY.lock()
+        .map_err(|e| JsValue::from_str(&format!("Failed to lock font registry: {}", e)))?;
+
+    if let Some(registered) = registry.as_ref() {
+        for font_family in registered.values() {
+            font_manager.register_font(font_family.clone())
+                .map_err(|e| JsValue::from_str(&format!("Failed to register font: {}", e)))?;
+        }
+    }
+    Ok(())
+}
+
+// ─── PDF generation ─────────────────────────────────────────────────────────────
+
 /// Generate PDF from JSON document structure
 ///
 /// This is the main entry point for TypeScript to generate PDFs.
@@ -62,18 +85,7 @@ pub fn generate_pdf(document_json: &str) -> std::result::Result<Vec<u8>, JsValue
 
     // Create PDF document with custom fonts from registry
     let mut pdf_doc = PdfDocument::new(doc_data.config);
-
-    // Load fonts from global registry
-    let registry = FONT_REGISTRY.lock()
-        .map_err(|e| JsValue::from_str(&format!("Failed to lock font registry: {}", e)))?;
-
-    if let Some(fonts) = registry.as_ref() {
-        for (_, font_family) in fonts.iter() {
-            pdf_doc.register_font_family(font_family.clone())
-                .map_err(|e| JsValue::from_str(&format!("Failed to register font: {}", e)))?;
-        }
-    }
-    drop(registry); // Release the lock
+    merge_registered_fonts(pdf_doc.font_manager())?;
 
     // Add pages
     for page_data in doc_data.pages {
@@ -105,6 +117,8 @@ struct DocumentData {
 struct PageData {
     content: Vec<content::ContentElement>,
 }
+
+// ─── Font registration & measurement (public WASM API) ───────────────────────────
 
 /// Register a custom font (receives font bytes)
 #[wasm_bindgen(js_name = registerFont)]
@@ -153,6 +167,32 @@ pub fn register_font(
     Ok(())
 }
 
+/// Real per-character advance widths for `text` in `font_family` at `font_size`,
+/// read from that font's own metrics tables — used by the TypeScript layout
+/// engine for text wrapping and alignment instead of an average-width guess.
+/// Sees the same embedded + custom-registered fonts as `generatePdf`.
+#[wasm_bindgen(js_name = measureChars)]
+pub fn measure_chars(
+    font_family: String,
+    bold: bool,
+    italic: bool,
+    text: String,
+    font_size: f32,
+) -> std::result::Result<Vec<f32>, JsValue> {
+    let mut font_manager = fonts::FontManager::new();
+    font_manager.load_embedded_fonts()
+        .map_err(|e| JsValue::from_str(&format!("Failed to load embedded fonts: {}", e)))?;
+    merge_registered_fonts(&mut font_manager)?;
+
+    let font_data = font_manager.get_font(&font_family, bold, italic)
+        .map_err(|e| JsValue::from_str(&format!("Failed to get font: {}", e)))?;
+
+    metrics::measure_chars(font_data, &text, font_size)
+        .map_err(|e| JsValue::from_str(&format!("Failed to measure text: {}", e)))
+}
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────────────
+
 /// Simple test function to verify WASM is working
 #[wasm_bindgen(js_name = testWasm)]
 pub fn test_wasm() -> String {
@@ -166,7 +206,8 @@ mod tests {
 
     #[test]
     fn test_version() {
-        assert_eq!(version(), "0.1.0");
+        // Compare against Cargo.toml directly so this doesn't go stale on every bump.
+        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
     }
 
     #[test]

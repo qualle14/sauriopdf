@@ -6,8 +6,8 @@ use sauriopdf_core::*;
 
 #[test]
 fn test_version() {
-    let ver = version();
-    assert_eq!(ver, "0.1.0");
+    // Compare against Cargo.toml directly so this doesn't go stale on every bump.
+    assert_eq!(version(), env!("CARGO_PKG_VERSION"));
 }
 
 #[test]

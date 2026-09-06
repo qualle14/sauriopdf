@@ -1,7 +1,26 @@
 use crate::types::{Color, Point, Rect, TextAlign};
 use serde::{Deserialize, Serialize};
 
-/// Text content element
+// ─── Stroke style enums ───────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum LineCap {
+    #[default]
+    Butt,
+    Round,
+    Square,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum LineJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
+}
+
+// ─── Text element ─────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextElement {
     pub content: String,
@@ -31,12 +50,12 @@ impl Default for TextElement {
     }
 }
 
-/// Image content element
+// ─── Image element ────────────────────────────────────────────────────────────
+
+/// Base64-encoded image. Sent as a string in JSON to avoid the ~4× overhead
+/// of serialising raw bytes as a JSON integer array.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageElement {
-    /// Base64-encoded image bytes (PNG, JPEG, or WebP).
-    /// Sent as a string in JSON to avoid the ~4x overhead of serializing
-    /// a byte array as a JSON array of integers.
     pub data: String,
     pub position: Point,
     pub width: Option<f32>,
@@ -51,7 +70,8 @@ pub enum ImageFormat {
     Webp,
 }
 
-/// Link/Hyperlink element
+// ─── Link element ─────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkElement {
     pub url: String,
@@ -59,7 +79,8 @@ pub struct LinkElement {
     pub text: Option<String>,
 }
 
-/// Shape elements
+// ─── Shape elements ───────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShapeElement {
     Rectangle {
@@ -81,6 +102,16 @@ pub enum ShapeElement {
         end: Point,
         color: Color,
         width: f32,
+        #[serde(default)]
+        line_cap: LineCap,
+        #[serde(default)]
+        line_join: LineJoin,
+        /// Dash pattern: alternating dash/gap lengths in points.
+        /// Empty means solid line.
+        #[serde(default)]
+        dash_array: Vec<f32>,
+        #[serde(default)]
+        dash_offset: f32,
     },
     Path {
         points: Vec<Point>,
@@ -88,10 +119,15 @@ pub enum ShapeElement {
         fill_color: Option<Color>,
         stroke_width: f32,
         closed: bool,
+        #[serde(default)]
+        line_cap: LineCap,
+        #[serde(default)]
+        line_join: LineJoin,
     },
 }
 
-/// Content element that can be added to a PDF page
+// ─── Top-level content element ────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ContentElement {
     Text(TextElement),
@@ -100,14 +136,23 @@ pub enum ContentElement {
     Shape(ShapeElement),
 }
 
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_text_element_default() {
+    fn text_element_defaults() {
         let text = TextElement::default();
         assert_eq!(text.content, "");
         assert_eq!(text.font_size, 12.0);
+        assert!(!text.bold);
+    }
+
+    #[test]
+    fn line_cap_default_is_butt() {
+        let cap = LineCap::default();
+        assert!(matches!(cap, LineCap::Butt));
     }
 }

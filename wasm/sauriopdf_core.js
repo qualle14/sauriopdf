@@ -464,6 +464,41 @@ export function initialize() {
 }
 
 /**
+ * Real per-character advance widths for `text` in `font_family` at `font_size`,
+ * read from that font's own metrics tables — used by the TypeScript layout
+ * engine for text wrapping and alignment instead of an average-width guess.
+ * Sees the same embedded + custom-registered fonts as `generatePdf`.
+ * @param {string} font_family
+ * @param {boolean} bold
+ * @param {boolean} italic
+ * @param {string} text
+ * @param {number} font_size
+ * @returns {Float32Array}
+ */
+export function measureChars(font_family, bold, italic, text, font_size) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passStringToWasm0(font_family, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(text, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.measureChars(retptr, ptr0, len0, bold, italic, ptr1, len1, font_size);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
+        var v3 = getArrayF32FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export(r0, r1 * 4, 4);
+        return v3;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Register a custom font (receives font bytes)
  * @param {string} name
  * @param {Uint8Array} font_data
@@ -545,8 +580,36 @@ function __wbg_get_imports() {
                 wasm.__wbindgen_export(deferred0_0, deferred0_1, 1);
             }
         },
+        __wbg_getUTCDate_aad14cab5ce3b408: function(arg0) {
+            const ret = getObject(arg0).getUTCDate();
+            return ret;
+        },
+        __wbg_getUTCFullYear_e2ef808de49a659f: function(arg0) {
+            const ret = getObject(arg0).getUTCFullYear();
+            return ret;
+        },
+        __wbg_getUTCHours_35ca437eb5eea37f: function(arg0) {
+            const ret = getObject(arg0).getUTCHours();
+            return ret;
+        },
+        __wbg_getUTCMinutes_f7f7e50da0efa786: function(arg0) {
+            const ret = getObject(arg0).getUTCMinutes();
+            return ret;
+        },
+        __wbg_getUTCMonth_1225344f80ac9874: function(arg0) {
+            const ret = getObject(arg0).getUTCMonth();
+            return ret;
+        },
+        __wbg_getUTCSeconds_0974d30103b4f4d9: function(arg0) {
+            const ret = getObject(arg0).getUTCSeconds();
+            return ret;
+        },
         __wbg_log_6b5ca2e6124b2808: function(arg0) {
             console.log(getObject(arg0));
+        },
+        __wbg_new_0_73afc35eb544e539: function() {
+            const ret = new Date();
+            return addHeapObject(ret);
         },
         __wbg_new_8a6f238a6ece86ea: function() {
             const ret = new Error();
@@ -602,6 +665,11 @@ function dropObject(idx) {
     heap_next = idx;
 }
 
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
@@ -613,6 +681,14 @@ function getDataViewMemory0() {
         cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
     }
     return cachedDataViewMemory0;
+}
+
+let cachedFloat32ArrayMemory0 = null;
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {
@@ -719,6 +795,7 @@ function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     wasmModule = module;
     cachedDataViewMemory0 = null;
+    cachedFloat32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;

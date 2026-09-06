@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+// ─── Page & text enums ────────────────────────────────────────────────────────
+
 /// Page size presets
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -56,6 +58,8 @@ pub enum FontStyle {
     Oblique,
 }
 
+// ─── Color ────────────────────────────────────────────────────────────────────
+
 /// Color representation (RGB)
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -109,6 +113,8 @@ impl Color {
     }
 }
 
+// ─── Geometry ─────────────────────────────────────────────────────────────────
+
 /// Point/Position in 2D space
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -153,13 +159,15 @@ pub struct PageDimensions {
 impl PageDimensions {
     pub fn from_page_size(size: PageSize, orientation: Orientation) -> Self {
         let (w, h) = match size {
-            PageSize::A4 => (595.0, 842.0),      // 210mm x 297mm
-            PageSize::A3 => (842.0, 1191.0),     // 297mm x 420mm
-            PageSize::A5 => (420.0, 595.0),      // 148mm x 210mm
-            PageSize::Letter => (612.0, 792.0),  // 8.5" x 11"
-            PageSize::Legal => (612.0, 1008.0),  // 8.5" x 14"
-            PageSize::Tabloid => (792.0, 1224.0), // 11" x 17"
-            PageSize::Custom => (595.0, 842.0),  // Default to A4
+            PageSize::A4 => (595.0, 842.0),
+            PageSize::A3 => (842.0, 1191.0),
+            PageSize::A5 => (420.0, 595.0),
+            PageSize::Letter => (612.0, 792.0),
+            PageSize::Legal => (612.0, 1008.0),
+            PageSize::Tabloid => (792.0, 1224.0),
+            // Custom dimensions come from DocumentConfig.custom_width/height.
+            // This fallback is only reached if those fields are missing.
+            PageSize::Custom => (595.0, 842.0),
         };
 
         match orientation {
@@ -167,7 +175,13 @@ impl PageDimensions {
             Orientation::Landscape => PageDimensions { width: h, height: w },
         }
     }
+
+    pub fn custom(width: f32, height: f32) -> Self {
+        PageDimensions { width, height }
+    }
 }
+
+// ─── Margin ───────────────────────────────────────────────────────────────────
 
 /// Margin specification
 #[wasm_bindgen]
