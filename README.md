@@ -4,10 +4,9 @@ High-performance PDF generation for **Deno, Node.js, Bun, and browsers** — pow
 Rust/WebAssembly core ([Krilla](https://github.com/LaurenzV/krilla)).
 
 - Auto-layout with wrapping, page breaks, tables, lists, code blocks, columns, callouts
-- Liberation Sans + Mono embedded — zero font setup in the default build
+- Liberation Sans + Mono embedded — zero font setup required
 - Font subsetting automatic — only glyphs actually used are embedded in the PDF
 - PDF/A archival mode (1a–3u)
-- Two builds: **full** (5.4 MB, fonts embedded) and **slim** (2.7 MB, load fonts at runtime)
 - No Rust required — pre-built WASM included
 
 ---
@@ -76,12 +75,12 @@ await pdf.save("invoice.pdf");
 ```
 TypeScript (layout engine)         Rust / WASM (renderer)
 ──────────────────────────         ──────────────────────
-PDFBase                            Krilla 0.6
+PDFBase                            Krilla 0.8
   └─ PDFLayout                       draw_text()
        └─ PDF                         draw_path()
                                       draw_image()
 mod.ts          ─── JSON ──►          generate_pdf()
-mod.slim.ts     ◄── bytes ───
+                ◄── bytes ───
 ```
 
 All layout (cursor, text wrapping, alignment, tables, page breaks) happens in TypeScript.
@@ -101,31 +100,12 @@ src/
   types.ts       All public + internal types; RawElement discriminated union
   colors.ts      parseColor() + 100+ CSS named colors
   fonts.ts       Font name constants
-  wasm.ts        Full build WASM bootstrap
-  wasm-slim.ts   Slim build WASM bootstrap
+  wasm.ts        WASM bootstrap
 lib/
-  font-loader.ts       Font loading — full build
-  font-loader-slim.ts  Font loading — slim build
+  font-loader.ts       Font loading
 wasm/          Pre-built WASM with fonts embedded (5.4 MB)
-wasm-slim/     Pre-built WASM without fonts (2.7 MB) — build with: deno task build:wasm:slim
 fonts/         Liberation Sans + Mono TTF files
 rust-core/     Rust source
-```
-
----
-
-## Builds
-
-| Import | WASM | Fonts | When to use |
-|---|---|---|---|
-| `@sauriopdf/core` | 5.4 MB | Embedded | Default — zero setup |
-| `@sauriopdf/core/slim` | 2.7 MB | Load at runtime | Browser bundle size matters |
-
-```ts
-// Slim build — load fonts once before generating
-import { init, PDF, loadBuiltinFonts } from "@sauriopdf/core/slim";
-await init();
-await loadBuiltinFonts(); // resolves bundled font path automatically
 ```
 
 ---
@@ -141,6 +121,7 @@ await loadBuiltinFonts(); // resolves bundled font path automatically
 | `subject` | `string` | `""` |
 | `keywords` | `string[]` | `[]` |
 | `pageSize` | `"A4" \| "A3" \| "A5" \| "Letter" \| "Legal" \| "Tabloid"` | `"A4"` |
+| `customSize` | `[width, height]` in points — overrides `pageSize` | — |
 | `orientation` | `"Portrait" \| "Landscape"` | `"Portrait"` |
 | `margin` | `number \| { top, right, bottom, left }` | `72` (1 inch) |
 | `gap` | `number` | `8` |
@@ -210,6 +191,7 @@ pdf.table({
   striped?: boolean,
   borders?: boolean,          // default: true
   fontSize?: number,
+  font?: string,              // default: "Liberation Sans" — any loaded font works
   cellPadding?: number,
   headerBg?: ColorInput,
   headerColor?: ColorInput,
@@ -280,7 +262,7 @@ Mixes freely with layout mode.
 
 **`circle(x, y, r)`** `.fill(c)` `.stroke(c, w?)`
 
-**`line(x1, y1, x2, y2)`** `.color(c)` `.width(n)`
+**`line(x1, y1, x2, y2)`** `.color(c)` `.width(n)` `.lineCap(c)` `.lineJoin(j)` `.dash(dash, gap?, offset?)`
 
 **`path(points)`** `.fill(c)` `.stroke(c, w?)` `.closed()` `.open()`
 
@@ -322,7 +304,7 @@ import { loadFont, loadFonts, loadLiberationSans, loadLiberationMono, loadBuilti
 await loadLiberationSans("path/to/fonts");
 await loadLiberationMono("https://cdn.example.com/fonts");
 
-// Load all built-in fonts at their bundled path (slim build)
+// Load all built-in fonts at their bundled path
 await loadBuiltinFonts();
 
 // Custom font
@@ -333,6 +315,60 @@ await loadFonts([
 ]);
 ```
 
+**Variant naming**: a name ending in ` Bold`, ` Italic`, or ` Bold Italic` registers that file as a
+*variant* of the base family, not a separate font. Select variants with `.bold()`/`{ bold: true }`
+and `.italic()`/`{ italic: true }` on the base family name — not by using the suffixed name as a font:
+
+```ts
+await loadFonts([
+  { name: "MyFont",        path: "./regular.ttf" },
+  { name: "MyFont Bold",   path: "./bold.ttf" },      // registers as a bold variant of "MyFont"
+]);
+
+pdf.p("negrita", { font: "MyFont", bold: true }); // ✓ correct
+pdf.p("negrita", { font: "MyFont Bold" });        // ✗ throws — no family named "MyFont Bold"
+```
+
+**Unregistered fonts throw immediately**, not just at `save()`/`generate()`: text layout (`p()`, `h1()`,
+`list()`, …) measures the string in its target font right away to compute wrapping, so a typo'd or
+never-loaded font name fails at that call with `Font family 'X' not found` — before you've built the
+rest of the document.
+
+---
+
+## Worker pool (optional)
+
+PDF generation runs synchronously by default — `generate()` blocks the calling thread while
+Krilla renders. For a long-running server generating many PDFs concurrently, that can matter.
+The worker pool is a separate, opt-in module: `mod.ts` never imports it, so it costs nothing —
+not bytes, not behavior — unless you ask for it.
+
+```ts
+import { init, PDF } from "sauriopdf";
+import { generateWithPool, initPool, terminatePool } from "sauriopdf/pool";
+
+await init();       // still required — layout/wrapping runs on the main thread too
+await initPool();   // throws if this platform can't actually run Workers
+
+const pdf = new PDF({ title: "Report" });
+pdf.h1("Hello");
+const bytes = await generateWithPool(pdf); // rendered on a worker, not in-process
+
+terminatePool();
+```
+
+- **Deno / Bun / browsers** use the standard `Worker` API; **Node.js** uses `node:worker_threads`.
+- **Platforms that can't run Workers throw, they don't silently fall back.** Deno Deploy is the
+  known case — its isolate model has no OS threads. If `initPool()` rejects, generate with the
+  regular sync API instead; don't retry in a loop.
+- **Memory**: each worker runs its own WASM instance. A pool of 4 workers means ~4× the
+  library's WASM footprint resident in memory at once — fine for a long-running server, worth
+  a second thought in a memory-constrained environment.
+- **Custom fonts**: if you're using the pool, register fonts through `registerFont` from
+  `sauriopdf/pool` (not the regular one, and not `loadFont`/`loadFonts`) — that's the version
+  that also propagates to every live worker.
+- `initPool(size?)` defaults to `min(cpu cores, 4)` workers.
+
 ---
 
 ## Contributing
@@ -342,8 +378,7 @@ Rust toolchain + `wasm-bindgen-cli` required to modify the WASM core.
 ```bash
 cargo install wasm-bindgen-cli
 
-deno task build:wasm        # full build → wasm/
-deno task build:wasm:slim   # slim build → wasm-slim/
+deno task build:wasm        # → wasm/
 deno task test
 deno task check
 ```

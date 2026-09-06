@@ -1,6 +1,6 @@
 {
   "name": "sauriopdf",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "High-performance PDF generation for Deno, Node.js, Bun, and browsers — powered by Rust/WASM (Krilla)",
   "type": "module",
   "exports": {
@@ -8,9 +8,9 @@
       "import": "./dist/mod.js",
       "types": "./dist/mod.d.ts"
     },
-    "./slim": {
-      "import": "./dist/mod.slim.js",
-      "types": "./dist/mod.slim.d.ts"
+    "./pool": {
+      "import": "./dist/pool.js",
+      "types": "./dist/pool.d.ts"
     }
   },
   "main": "./dist/mod.js",
@@ -19,7 +19,7 @@
   "scripts": {
     "build:wasm": "cd rust-core && cargo build --target wasm32-unknown-unknown --release && wasm-bindgen target/wasm32-unknown-unknown/release/sauriopdf_core.wasm --out-dir ../wasm --target web",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build:ts": "npm run clean && tsc --project tsconfig.npm.json && node -e \"const fs=require('fs'); fs.cpSync('wasm','dist/wasm',{recursive:true}); fs.cpSync('wasm-slim','dist/wasm-slim',{recursive:true}); fs.cpSync('fonts','dist/fonts',{recursive:true})\"",
+    "build:ts": "npm run clean && tsc --project tsconfig.npm.json && node -e \"const fs=require('fs'); fs.cpSync('wasm','dist/wasm',{recursive:true}); fs.cpSync('fonts','dist/fonts',{recursive:true})\"",
     "build": "npm run build:wasm && npm run build:ts",
     "prepublishOnly": "npm run build:ts"
   },

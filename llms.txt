@@ -1,7 +1,7 @@
 # SaurioPDF — LLM Reference
 
 PDF generation library for Deno, Node.js, Bun, and browsers.
-Rust/WASM core (Krilla 0.6) + TypeScript builder API.
+Rust/WASM core (Krilla 0.8) + TypeScript builder API.
 JSR: jsr:@sauriopdf/core  |  npm: sauriopdf  |  version: 0.2.0
 
 ---
@@ -20,7 +20,7 @@ import { init, PDF } from "sauriopdf"; // npm install sauriopdf
 await init(); // detects Node.js, reads .wasm via fs — no fetch needed. Requires Node ≥ 18.
 ```
 
-**Browser (full build)**
+**Browser**
 ```html
 <script type="module">
   import { init, PDF } from "https://esm.sh/sauriopdf@0.2.0";
@@ -35,25 +35,14 @@ await init(); // detects Node.js, reads .wasm via fs — no fetch needed. Requir
 </script>
 ```
 
-**Slim build** (2.7 MB WASM — fonts load at runtime)
-```ts
-import { init, PDF, loadBuiltinFonts } from "jsr:@sauriopdf/core/slim";
-await init();
-await loadBuiltinFonts(); // resolves bundled font path via import.meta.url
-```
-
 Edge runtimes (Cloudflare Workers, Vercel Edge, Deno Deploy) are NOT supported — WASM too large.
 
 ---
 
-## TWO BUILDS
+## THE BUILD
 
-| Import path | WASM size | Fonts | Notes |
-|---|---|---|---|
-| `@sauriopdf/core` | 5.4 MB | Liberation Sans + Mono embedded | Default. Zero setup. |
-| `@sauriopdf/core/slim` | 2.7 MB | Must load at runtime | For browser bundle optimization. |
-
-Slim build requires calling `loadBuiltinFonts()` or `loadLiberationSans()` before generating any PDF.
+Single WASM build, ~5.4 MB, with Liberation Sans + Mono embedded — zero setup.
+`loadFont()` / `loadFonts()` remain available for registering additional custom fonts.
 
 ---
 
@@ -411,7 +400,8 @@ Both Liberation Sans and Liberation Mono are embedded in the full WASM build.
 import { loadLiberationSans, loadLiberationMono, loadBuiltinFonts,
          loadFont, loadFonts } from "jsr:@sauriopdf/core";
 
-// Load all built-in fonts at their bundled path (intended for slim build)
+// Load all built-in fonts at their bundled path (redundant with the embedded
+// Liberation set, but useful for re-registering custom Liberation-family builds)
 await loadBuiltinFonts();
 
 // Load Liberation Sans from a directory path (or URL prefix for browser)
@@ -433,7 +423,12 @@ await loadFonts([
 ```
 
 Font names follow the convention: family + variant suffix (" Bold", " Italic", " Bold Italic").
-Rust maps variants by suffix to the correct font slot (bold, italic, bold_italic).
+Rust maps variants by suffix to the correct font slot (bold, italic, bold_italic). Select the
+variant with `{ bold: true }` / `{ italic: true }` on the base family name — `font: "MyFont Bold"`
+is not a valid family and throws.
+
+An unregistered font throws immediately at the layout call (p(), h1(), list(), …), not just at
+generate()/save() — wrapping measures the string in its target font right away via measureChars().
 
 Font subsetting is automatic — Krilla tracks every glyph drawn and subsets on finish().
 
@@ -472,6 +467,32 @@ pdf.conformsTo("2b"); // fluent equivalent
 // Levels: "1a", "1b", "2a", "2b", "2u", "3a", "3b", "3u"
 // "2b" is the most common level for archival use
 ```
+
+---
+
+## WORKER POOL (optional — sauriopdf/pool)
+
+Separate opt-in module, not imported by the main "sauriopdf" entry — zero cost unless used.
+
+```ts
+import { init, PDF } from "sauriopdf";
+import { generateWithPool, initPool, terminatePool } from "sauriopdf/pool";
+
+await init();     // still required — layout/wrapping runs on the main thread
+await initPool(); // throws (does NOT silently fall back) if Workers aren't usable here
+
+const pdf = new PDF();
+pdf.h1("Hello");
+const bytes = await generateWithPool(pdf); // rendered on a worker
+terminatePool();
+```
+
+Runtimes: Deno/Bun/browser share the standard `Worker` API; Node.js uses `node:worker_threads`.
+Known unsupported platform: Deno Deploy (isolate model, no OS threads) — `initPool()` rejects
+there, by design; don't retry, just use the regular sync `generate()`.
+Memory: N workers = N× the WASM footprint resident (each worker has its own WASM instance).
+Custom fonts with the pool: use `registerFont` from `sauriopdf/pool`, not the regular one —
+only that version propagates to live workers.
 
 ---
 
@@ -575,14 +596,13 @@ src/layout.ts          wrapLines(), alignmentOffset(), estimateLineWidth(), esti
 src/types.ts           All public + internal types; RawElement discriminated union
 src/colors.ts          parseColor() + CSS color name map
 src/fonts.ts           Font name constants + BuiltinFont type
-src/wasm.ts            Full build WASM bootstrap (imports wasm/)
-src/wasm-slim.ts       Slim build WASM bootstrap (imports wasm-slim/)
-lib/font-loader.ts     Font loading for full build (registerFont from wasm/)
-lib/font-loader-slim.ts Font loading for slim build (registerFont from wasm-slim/)
-mod.ts                 Full build entry point
-mod.slim.ts            Slim build entry point
+src/wasm.ts            WASM bootstrap (imports wasm/)
+src/pool.ts            Optional worker-pool backend — not imported by mod.ts
+src/worker-entry.ts    Script run inside each pool worker (own WASM instance)
+lib/font-loader.ts     Font loading (registerFont from wasm/)
+mod.ts                 Package entry point
+pool.ts                sauriopdf/pool entry point (re-exports src/pool.ts)
 wasm/                  Pre-built WASM with fonts embedded (5.4 MB)
-wasm-slim/             Pre-built WASM without fonts (2.7 MB)
 fonts/                 Liberation Sans + Mono TTF files
 rust-core/             Rust source — Krilla rendering pipeline
 ```

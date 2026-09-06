@@ -25,7 +25,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Run tests
-        run: deno test --allow-read --allow-write main_test.ts
+        run: deno test --allow-read --allow-write main_test.ts pool_test.ts
 
       - name: Build TypeScript + copy WASM + copy fonts
         run: npm run build:ts

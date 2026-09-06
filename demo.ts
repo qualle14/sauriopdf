@@ -10,7 +10,7 @@ await loadLiberationSans("fonts/liberation-fonts-ttf-2.1.5");
 
 const pdf = new PDF({ title: "SaurioPDF Demo", author: "SaurioPDF" });
 
-// ── Header (repeats on every page) ───────────────────────────────────────────
+// ─── Header (repeats on every page) ───────────────────────────────────────────
 
 pdf.header(36, (ctx) => {
   ctx.add(rect(0, 0, ctx.width, ctx.height).fill("#1a1a2e"));
@@ -29,7 +29,7 @@ pdf.header(36, (ctx) => {
   );
 });
 
-// ── Footer (with page numbers) ────────────────────────────────────────────────
+// ─── Footer (with page numbers) ────────────────────────────────────────────────
 
 pdf.footer(24, (ctx) => {
   ctx.add(
@@ -42,7 +42,7 @@ pdf.footer(24, (ctx) => {
   );
 });
 
-// ── Cover page ────────────────────────────────────────────────────────────────
+// ─── Cover page ────────────────────────────────────────────────────────────────
 
 pdf
   .h1("SaurioPDF Demo")

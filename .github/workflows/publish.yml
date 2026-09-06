@@ -22,10 +22,10 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Verify types
-        run: deno check mod.ts mod.slim.ts
+        run: deno check mod.ts pool.ts src/worker-entry.ts
 
       - name: Run tests
-        run: deno test --allow-read --allow-write main_test.ts
+        run: deno test --allow-read --allow-write main_test.ts pool_test.ts
 
       - name: Publish to JSR
         run: deno publish

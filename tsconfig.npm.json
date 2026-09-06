@@ -14,7 +14,7 @@
   },
   "include": [
     "mod.ts",
-    "mod.slim.ts",
+    "pool.ts",
     "src/**/*.ts",
     "lib/**/*.ts"
   ],

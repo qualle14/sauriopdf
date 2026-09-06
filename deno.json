@@ -1,17 +1,16 @@
 {
   "name": "@sauriopdf/core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "exports": {
     ".": "./mod.ts",
-    "./slim": "./mod.slim.ts"
+    "./pool": "./pool.ts"
   },
   "tasks": {
-    "test": "deno test --allow-read --allow-write main_test.ts",
+    "test": "deno test --allow-read --allow-write main_test.ts pool_test.ts",
     "test:watch": "deno test --allow-read --allow-write --watch main_test.ts",
-    "check": "deno check mod.ts",
+    "check": "deno check mod.ts pool.ts src/worker-entry.ts",
     "demo": "deno run --allow-read --allow-write demo.ts",
     "build:wasm": "cd rust-core && cargo build --target wasm32-unknown-unknown --release && wasm-bindgen target/wasm32-unknown-unknown/release/sauriopdf_core.wasm --out-dir ../wasm --target web",
-    "build:wasm:slim": "cd rust-core && cargo build --target wasm32-unknown-unknown --release --no-default-features --features console_error_panic_hook && wasm-bindgen target/wasm32-unknown-unknown/release/sauriopdf_core.wasm --out-dir ../wasm-slim --target web",
     "lint": "deno lint --ignore=rust-core,node_modules",
     "fmt": "deno fmt --ignore=rust-core,node_modules"
   },
@@ -20,7 +19,7 @@
   },
   "lint": {
     "rules": { "tags": ["recommended"] },
-    "exclude": ["rust-core/", "node_modules/", "wasm/", "wasm-slim/", ".idea/"]
+    "exclude": ["rust-core/", "node_modules/", "wasm/", ".idea/"]
   },
   "fmt": {
     "useTabs": false,
@@ -28,7 +27,7 @@
     "indentWidth": 2,
     "semiColons": true,
     "singleQuote": false,
-    "exclude": ["rust-core/", "node_modules/", "wasm/", "wasm-slim/", ".idea/"]
+    "exclude": ["rust-core/", "node_modules/", "wasm/", ".idea/"]
   },
   "compilerOptions": {
     "strict": true,
@@ -37,11 +36,10 @@
   "publish": {
     "include": [
       "mod.ts",
-      "mod.slim.ts",
+      "pool.ts",
       "src/",
       "lib/",
       "wasm/",
-      "wasm-slim/",
       "fonts/",
       "README.md",
       "llms.txt",
